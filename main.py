@@ -6,9 +6,18 @@ import subprocess
 from dotenv import load_dotenv
 from telethon import TelegramClient, events
 
+# --- COULEURS POUR L'AFFICHAGE ---
+RED = "\033[91m"
+GREEN = "\033[92m"
+YELLOW = "\033[93m"
+RESET = "\033[0m"
+BLUE = "\033[94m"
+
 # --- CONFIGURATION TÉLÉPHONE ---
 MULTI_APP_PACKAGE = "com.waxmoon.ma.gp/com.waxmoon.mobile.module.home.MainActivity"
 TIKTOK_PACKAGE = "com.zhiliaoapp.musically"
+# Correction du nom de l'activité Termux pour éviter l'erreur "Class does not exist"
+TERMUX_PACKAGE = "com.termux/com.termux.app.TermuxActivity"
 
 COORDINATES = {
     "LIKE_BUTTON": "950 1100",
@@ -33,7 +42,7 @@ class TaskBot:
         self.client = TelegramClient('session_telebot', int(API_ID), API_HASH)
         self.working = False
         self.device_id = None
-        self.adb_prefix = "adb shell" # Valeur par défaut
+        self.adb_prefix = "adb shell"
 
     def load_accounts(self):
         try:
@@ -53,78 +62,85 @@ class TaskBot:
         with open('stats.json', 'w') as f:
             json.dump(self.stats, f, indent=4)
 
-    # --- DÉTECTION DU MEILLEUR APPAREIL ---
+    # --- DÉTECTION APPAREIL ---
     def detect_device(self):
-        """Détecte l'appareil avec le statut 'device' et ignore 'unauthorized'"""
         try:
             output = subprocess.check_output(["adb", "devices"]).decode("utf-8")
-            lines = output.strip().split('\n')[1:] # On ignore la première ligne
-            
+            lines = output.strip().split('\n')[1:]
             authorized_devices = []
             for line in lines:
                 if "\tdevice" in line:
                     authorized_devices.append(line.split('\t')[0])
             
             if not authorized_devices:
-                print("❌ Aucun appareil autorisé trouvé (statut 'device' absent).")
+                print(f"{RED}❌ Aucun appareil autorisé trouvé.{RESET}")
                 return False
             
-            # On prend le premier appareil valide trouvé
             self.device_id = authorized_devices[0]
             self.adb_prefix = f"adb -s {self.device_id} shell"
-            print(f"✅ Appareil détecté et ciblé : {self.device_id}")
+            print(f"{GREEN}✅ Appareil détecté : {self.device_id}{RESET}")
             return True
         except Exception as e:
-            print(f"❌ Erreur lors de la détection ADB : {e}")
+            print(f"{RED}❌ Erreur détection ADB : {e}{RESET}")
             return False
 
-    # --- LOGIQUE D'AUTOMATISATION ADB ---
+    # --- SÉQUENCE D'AUTOMATISATION ---
     async def run_adb_interaction(self, account_idx, link, action):
         if not self.device_id:
             if not self.detect_device(): return False
 
         try:
-            print(f"🤖 [Device: {self.device_id}] Lancement TikTok session n°{account_idx}...")
+            # 0. Nettoyage préalable (Ferme TikTok s'il est ouvert)
+            os.system(f"{self.adb_prefix} am force-stop {TIKTOK_PACKAGE}")
+            await asyncio.sleep(1)
+
+            print(f"{YELLOW}⏳ En attente de l'application Multi-App...{RESET}")
             
             # 1. Ouvrir Multi App
-            os.system(f"{self.adb_prefix} am start -n {MULTI_APP_PACKAGE}")
-            await asyncio.sleep(4)
+            os.system(f"{self.adb_prefix} am start -n {MULTI_APP_PACKAGE} > /dev/null 2>&1")
+            # Pause augmentée pour laisser le temps au téléphone
+            await asyncio.sleep(8) 
+            print(f"{GREEN}✅ Application Multi-App ouverte{RESET}")
 
-            # 2. Cliquer sur le bloc TikTok
+            # 2. Cliquer sur le profil
             pos = COORDINATES["APP_SLOTS"].get(account_idx, "540 400")
             os.system(f"{self.adb_prefix} input tap {pos}")
-            await asyncio.sleep(6)
+            await asyncio.sleep(8) # Temps de chargement du clone TikTok
 
             # 3. Ouvrir le lien
-            print(f"🔗 Ouverture du lien : {link}")
-            os.system(f"{self.adb_prefix} am start -a android.intent.action.VIEW -d {link}")
-            await asyncio.sleep(8)
+            print(f"{RED}🔗 Envoi du lien vers TikTok...{RESET}")
+            os.system(f"{self.adb_prefix} am start -a android.intent.action.VIEW -d {link} > /dev/null 2>&1")
+            
+            print(f"{YELLOW}⏳ Chargement de la vidéo/profil...{RESET}")
+            await asyncio.sleep(10) # Pause longue pour chargement vidéo
+            print(f"{GREEN}✅ Lien ouvert (supposé){RESET}")
 
-            # 4. Action Like ou Follow
+            # 4. Action
             if "Like" in action:
                 os.system(f"{self.adb_prefix} input tap {COORDINATES['LIKE_BUTTON']}")
-                print("❤️ Action : Like effectué")
+                print(f"{GREEN}❤️ J'aime effectué{RESET}")
             elif "Follow" in action or "profile" in action:
                 os.system(f"{self.adb_prefix} input tap {COORDINATES['FOLLOW_BUTTON']}")
-                print("👤 Action : Follow effectué")
+                print(f"{GREEN}👤 Follow effectué{RESET}")
             
             await asyncio.sleep(3)
 
-            # 5. Fermer TikTok et revenir Termux
+            # 5. Fermeture propre et retour Termux
+            print(f"{BLUE}🔄 Fermeture de TikTok et retour Termux...{RESET}")
             os.system(f"{self.adb_prefix} am force-stop {TIKTOK_PACKAGE}")
-            os.system(f"{self.adb_prefix} am start -n com.termux/.MainActivity")
+            await asyncio.sleep(1)
+            os.system(f"{self.adb_prefix} am start -n {TERMUX_PACKAGE} > /dev/null 2>&1")
+            
             return True
+
         except Exception as e:
-            print(f"❌ Erreur interaction : {e}")
+            print(f"{RED}❌ Erreur séquence : {e}{RESET}")
             return False
 
     async def start_telegram(self):
-        # Vérification du device avant de lancer Telegram
-        if not self.detect_device():
-            print("🛑 Abandon : Aucun téléphone connecté via ADB.")
-            return
+        if not self.detect_device(): return
 
-        print("\n--- Connexion à Telegram ---")
+        print(f"\n{BLUE}--- Connexion à Telegram ---{RESET}")
         try:
             await self.client.start()
             self.client.add_event_handler(self.message_handler, events.NewMessage(chats=TARGET_BOT))
@@ -132,13 +148,14 @@ class TaskBot:
             await self.client.send_message(TARGET_BOT, 'TikTok')
             await self.client.run_until_disconnected()
         except Exception as e:
-            print(f"❌ Erreur Telegram : {e}")
+            print(f"{RED}❌ Erreur Telegram : {e}{RESET}")
 
     async def message_handler(self, event):
         if not self.working: return
         text = event.message.message or ""
         buttons = event.message.buttons
 
+        # --- TRAITEMENT DU TASK ---
         if "Link :" in text and "Action :" in text:
             link_match = re.search(r"Link\s*:\s*(https?://[^\s\n]+)", text)
             action_match = re.search(r"Action\s*:\s*([^\n]+)", text)
@@ -152,25 +169,35 @@ class TaskBot:
                 account_num = self.current_account_index + 1
                 current_acc_name = self.accounts[self.current_account_index]
 
-                print(f"⚡ Tâche pour {current_acc_name} (Session {account_num})")
+                print(f"\n{BLUE}⚡ Tâche détectée pour {current_acc_name} (Session {account_num}){RESET}")
                 
+                # Exécution ADB avec affichage couleur
                 success = await self.run_adb_interaction(account_num, url, action)
 
                 if success and buttons:
+                    # On cherche le bouton "Completed"
                     for i, row in enumerate(buttons):
                         for j, btn in enumerate(row):
                             if any(x in btn.text for x in ["Completed", "✅"]):
+                                await asyncio.sleep(2) # Petite pause avant de valider
                                 await event.message.click(i, j)
+                                
                                 self.stats["total_earned"] += reward_val
                                 self.save_stats_now()
-                                print(f"💰 Succès ! Total : {self.stats['total_earned']:.2f}")
+                                print(f"{GREEN}💰 Tâche validée ! Gain: +{reward_val} | Total: {self.stats['total_earned']:.2f}{RESET}")
+                                print(f"{BLUE}---------------------------------------------------{RESET}")
                                 return
 
+        # --- PAS DE TÂCHE (SORRY) ---
         elif "Sorry" in text:
+            print(f"{YELLOW}😴 Pas de tâche sur : {self.accounts[self.current_account_index]}{RESET}")
             self.current_account_index = (self.current_account_index + 1) % len(self.accounts)
-            await asyncio.sleep(2)
+            
+            print(f"{BLUE}🔄 Recherche sur le compte suivant...{RESET}")
+            await asyncio.sleep(5) # Pause avant de demander le compte suivant
             await self.client.send_message(TARGET_BOT, 'TikTok')
 
+        # --- SÉLECTION DU COMPTE ---
         elif buttons:
             current_target = self.accounts[self.current_account_index]
             for i, row in enumerate(buttons):
@@ -182,16 +209,15 @@ class TaskBot:
 async def main_menu():
     bot = TaskBot()
     while True:
-        print(f"\n--- MENU (Device: {bot.device_id or 'Non détecté'}) ---")
-        print(f"Solde actuel: {bot.stats['total_earned']:.2f} coins")
-        print("[1] Lancer le cycle")
+        print(f"\n{BLUE}--- MENU BOT v2 (Solde: {bot.stats['total_earned']:.2f}) ---{RESET}")
+        print("[1] Lancer le bot (Mode Séquentiel)")
         print("[2] Ajouter un compte")
-        print("[3] Redétecter le téléphone (ADB)")
+        print("[3] Redétecter ADB")
         print("[4] Quitter")
         
-        choice = input("Choix : ")
+        choice = input(f"{YELLOW}Choix : {RESET}")
         if choice == '1':
-            if not bot.accounts: print("❌ Liste de comptes vide !"); continue
+            if not bot.accounts: print(f"{RED}❌ Liste vide !{RESET}"); continue
             await bot.start_telegram()
         elif choice == '2':
             name = input("Nom du compte : ")
