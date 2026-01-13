@@ -2,6 +2,7 @@ import os
 import json
 import asyncio
 import logging
+import re
 from dotenv import load_dotenv
 from telethon import TelegramClient, events
 
@@ -63,85 +64,115 @@ class TaskBot:
         text = event.message.message or ""
         buttons = event.message.buttons
         
-        # 1. CAS : TACHE TROUVÉE (Priorité haute)
-        if "Link:" in text and "Action:" in text:
-            print(f"\n🎯 TACHE TROUVÉE !")
-            print(f"📝 Type: {'Like' if 'Like' in text else 'Follow' if 'Follow' in text else 'Autre'}")
+        # --- CAS 1 : TACHE TROUVÉE (Extraction des infos) ---
+        if "Link :" in text and "Action :" in text:
+            # Extraction propre des données
+            lines = [l.strip() for l in text.split('\n') if l.strip()]
+            task_link = "Inconnu"
+            task_type = "Autre"
+
+            for i, line in enumerate(lines):
+                if "Link" in line and (i + 1) < len(lines):
+                    # On prend le premier lien trouvé sur la ligne suivante (avant la parenthèse)
+                    task_link = lines[i+1].split(' ')[0]
+                if "Action" in line and (i + 1) < len(lines):
+                    action_text = lines[i+1].lower()
+                    if "like" in action_text: task_type = "Like"
+                    elif "follow" in action_text: task_type = "Follow"
+                    elif "comment" in action_text: task_type = "Comment"
+
+            # --- AFFICHAGE DEMANDÉ ---
+            print("\n" + "="*30)
+            print("🎯 Task trouver")
+            print(f"🔗 lien: {task_link}")
+            print(f"📝 Type: {task_type}")
+            print("="*30)
             
             if buttons:
                 for i, row in enumerate(buttons):
                     for j, btn in enumerate(row):
                         if "Completed" in btn.text or "✅" in btn.text:
+                            # Pause plus longue pour simuler le temps d'ouverture de TikTok
+                            print(f"⏳ Simulation de la tâche ({task_type})...")
+                            await asyncio.sleep(5) 
                             print("👆 Clic sur 'Completed'...")
-                            await asyncio.sleep(3) # Pause pour simuler l'action
                             await event.message.click(i, j)
                             return
 
-        # 2. CAS : PAS DE TACHE (SORRY)
+        # --- CAS 2 : PAS DE TACHE (SORRY) ---
         elif "Sorry" in text:
-            print(f"❌ Pas de tâche pour le compte actuel.")
+            print(f"❌ Pas de tâche pour : {self.accounts[self.current_account_index]}")
             self.current_account_index += 1
             
             if self.current_account_index >= len(self.accounts):
-                print("🔄 Tous les comptes ont été vérifiés. On recommence dans 10s...")
+                print("🔄 Fin de liste. Reprise dans 15s...")
                 self.current_account_index = 0
-                await asyncio.sleep(10)
+                await asyncio.sleep(15)
             
-            # Après un "Sorry", on doit retourner au menu TikTok pour changer de compte
             await asyncio.sleep(2)
             await self.send_tiktok_command()
 
-        # 3. CAS : LISTE DES COMPTES (Détecter si nos boutons de comptes sont là)
+        # --- CAS 3 : NAVIGATION MENU (TikTok / Liste comptes) ---
         elif buttons:
             current_target = self.accounts[self.current_account_index]
-            found_account_btn = False
             is_main_menu = False
 
             for i, row in enumerate(buttons):
                 for j, btn in enumerate(row):
-                    # Est-ce le bouton de mon compte TikTok actuel ?
                     if btn.text == current_target:
-                        print(f"👤 Compte trouvé dans la liste : {btn.text}. Clic...")
+                        print(f"👤 Sélection du compte : {btn.text}")
                         await asyncio.sleep(1.5)
                         await event.message.click(i, j)
                         return
-                    
-                    # Est-ce le menu principal (au cas où le bot réaffiche TikTok/Instagram)
                     if "TikTok" in btn.text:
                         is_main_menu = True
 
             if is_main_menu:
-                print("🏠 Menu principal détecté. Clic sur 'TikTok'...")
                 await asyncio.sleep(1)
                 await self.send_tiktok_command()
 
-    # --- MÉTHODES MENU ---
+    # --- MÉTHODES DU MENU ---
     def add_account(self):
         name = input("Nom du compte TikTok (ex: gat_gainer) : ")
         if name:
             self.accounts.append(name)
             self.save_accounts()
-            print("✅ Ajouté.")
+            print("✅ Compte ajouté avec succès.")
 
     def list_accounts(self):
-        print("\n--- COMPTES ENREGISTRÉS ---")
-        for i, acc in enumerate(self.accounts): print(f"[{i}] {acc}")
+        print("\n--- COMPTES TikTok ENREGISTRÉS ---")
+        if not self.accounts:
+            print("Aucun compte.")
+        for i, acc in enumerate(self.accounts):
+            print(f"[{i}] {acc}")
 
 async def main_menu():
     bot = TaskBot()
     while True:
-        print("\n=== BOT SMM KINGDOM ===")
-        print("[1] Démarrer l'Automatisation")
-        print("[2] Gérer les comptes TikTok")
+        print("\n=== BOT SMM KINGDOM TASK ===")
+        print("[1] Démarrer l'automatisation")
+        print("[2] Gérer les comptes (Liste/Ajout)")
         print("[3] Quitter")
-        c = input("Choix : ")
-        if c == '1':
-            if not bot.accounts: print("❌ Ajoutez des comptes d'abord !"); continue
+        
+        choice = input("👉 Choix : ")
+        
+        if choice == '1':
+            if not bot.accounts:
+                print("⚠️ Erreur : Ajoutez au moins un compte dans le menu [2]")
+                continue
             await bot.start_telegram()
-        elif c == '2':
+        elif choice == '2':
             bot.list_accounts()
-            if input("Tapez 'a' pour ajouter ou 'Entrée' pour retour : ") == 'a': bot.add_account()
-        elif c == '3': break
+            print("\nOptions : [a] Ajouter | [any] Retour")
+            opt = input("👉 Option : ").lower()
+            if opt == 'a':
+                bot.add_account()
+        elif choice == '3':
+            print("Fermeture du bot...")
+            break
 
 if __name__ == '__main__':
-    asyncio.run(main_menu())
+    try:
+        asyncio.run(main_menu())
+    except KeyboardInterrupt:
+        pass
