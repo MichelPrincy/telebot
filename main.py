@@ -8,7 +8,7 @@ from telethon import TelegramClient, events
 
 # --- CONFIGURATION TÉLÉPHONE (À MODIFIER) ---
 # Remplace par le nom du package de ton application Multi App
-MULTI_APP_PACKAGE = "com.multi.app.package/.MainActivity" 
+MULTI_APP_PACKAGE = "com.waxmoon.ma.gp/com.waxmoon.mobile.module.home.MainActivity" 
 
 # Remplace les coordonnées X Y par les tiennes
 COORDINATES = {
