@@ -143,8 +143,8 @@ class TaskBot:
             self.current_account_index = (self.current_account_index + 1) % len(self.accounts)
             
             if self.current_account_index == 0:
-                print("🔄 Cycle terminé. Pause de 30 secondes...")
-                await asyncio.sleep(30)
+                print("🔄 Cycle terminé. Pause de 10 secondes...")
+                await asyncio.sleep(10)
             
             await asyncio.sleep(2)
             await self.client.send_message(TARGET_BOT, 'TikTok')
