@@ -6,22 +6,22 @@ import time
 from dotenv import load_dotenv
 from telethon import TelegramClient, events
 
-# --- CONFIGURATION TÉLÉPHONE (À MODIFIER) ---
-# Remplace par le nom du package de ton application Multi App
-MULTI_APP_PACKAGE = "com.waxmoon.ma.gp/com.waxmoon.mobile.module.home.MainActivity" 
+# --- CONFIGURATION TÉLÉPHONE ---
+# Ton application Multi App (Vérifié via ton package précédent)
+MULTI_APP_PACKAGE = "com.waxmoon.ma.gp/com.waxmoon.mobile.module.home.MainActivity"
+TIKTOK_PACKAGE = "com.zhiliaoapp.musically" # Package standard TikTok (même cloné)
 
-# Remplace les coordonnées X Y par les tiennes
+# Coordonnées basées sur la structure visuelle de ta photo (à ajuster selon ton écran)
 COORDINATES = {
-    "LIKE_BUTTON": "950 1100",
-    "FOLLOW_BUTTON": "950 850",
-    "ACCOUNTS": {
-        "Compte1": "250 500", # Position de la 1ère icône TikTok dans Multi App
-        "Compte2": "500 500", # Position de la 2ème icône
-        "Compte3": "750 500", # Position de la 3ème icône
+    "LIKE_BUTTON": "950 1100",   # Coordonnée du coeur sur TikTok
+    "FOLLOW_BUTTON": "950 850",   # Coordonnée du bouton Suivre
+    "APP_SLOTS": {
+        1: "540 400",  # Centre du rectangle TikTok n°1
+        2: "540 700",  # Centre du rectangle TikTok n°2
+        3: "540 1000", # Centre du rectangle TikTok n°3
     }
 }
 
-# --- CONFIGURATION API ---
 load_dotenv()
 API_ID = os.getenv('API_ID')
 API_HASH = os.getenv('API_HASH')
@@ -37,7 +37,7 @@ class TaskBot:
 
     def load_accounts(self):
         try:
-            if os.path.exists('accounts.json') and os.path.getsize('accounts.json') > 0:
+            if os.path.exists('accounts.json'):
                 with open('accounts.json', 'r') as f: return json.load(f)
             return []
         except: return []
@@ -53,61 +53,66 @@ class TaskBot:
         with open('stats.json', 'w') as f:
             json.dump(self.stats, f, indent=4)
 
-    def save_accounts(self):
-        with open('accounts.json', 'w') as f:
-            json.dump(self.accounts, f, indent=4)
-
     # --- LOGIQUE D'AUTOMATISATION ADB ---
-    async def run_adb_interaction(self, account_name, link, action):
-        print(f"🤖 Action Android en cours pour {account_name}...")
-        
-        # 1. Ouvrir Multi App
-        os.system(f"am start -n {MULTI_APP_PACKAGE}")
-        await asyncio.sleep(3)
+    async def run_adb_interaction(self, account_idx, link, action):
+        """
+        account_idx: 1, 2 ou 3 (correspond au numéro sur ta photo)
+        """
+        try:
+            print(f"🤖 Lancement de TikTok session n°{account_idx}...")
+            
+            # 1. Ouvrir Multi App
+            os.system(f"adb shell am start -n {MULTI_APP_PACKAGE}")
+            await asyncio.sleep(3)
 
-        # 2. Cliquer sur l'icône TikTok spécifique
-        pos = COORDINATES["ACCOUNTS"].get(account_name, "250 500")
-        os.system(f"input tap {pos}")
-        await asyncio.sleep(5) # Attente ouverture TikTok
+            # 2. Cliquer sur le bloc TikTok correspondant (1, 2 ou 3)
+            pos = COORDINATES["APP_SLOTS"].get(account_idx, "540 400")
+            os.system(f"adb shell input tap {pos}")
+            await asyncio.sleep(6) # Attente chargement du clone
 
-        # 3. Ouvrir le lien de la vidéo
-        os.system(f"am start -a android.intent.action.VIEW -d {link}")
-        await asyncio.sleep(6) # Attente chargement vidéo
+            # 3. Envoyer le lien vers l'instance TikTok ouverte
+            print(f"🔗 Ouverture du lien : {link}")
+            os.system(f"adb shell am start -a android.intent.action.VIEW -d {link}")
+            await asyncio.sleep(7) # Attente chargement vidéo
 
-        # 4. Effectuer l'action
-        if "Like" in action:
-            os.system(f"input tap {COORDINATES['LIKE_BUTTON']}")
-            print("❤️ Like envoyé")
-        elif "Follow" in action or "Suivre" in action:
-            os.system(f"input tap {COORDINATES['FOLLOW_BUTTON']}")
-            print("👤 Follow envoyé")
-        
-        await asyncio.sleep(2)
+            # 4. Action Like ou Follow
+            if "Like" in action:
+                os.system(f"adb shell input tap {COORDINATES['LIKE_BUTTON']}")
+                print("❤️ Action : Like effectué")
+            elif "Follow" in action or "Suivre" in action:
+                os.system(f"adb shell input tap {COORDINATES['FOLLOW_BUTTON']}")
+                print("👤 Action : Follow effectué")
+            
+            await asyncio.sleep(2)
 
-        # 5. Retourner sur Termux/Telegram
-        os.system("am start -n com.termux/.MainActivity")
-        await asyncio.sleep(1)
+            # 5. Fermer TikTok (force-stop) pour nettoyer avant la prochaine tâche
+            os.system(f"adb shell am force-stop {TIKTOK_PACKAGE}")
+            
+            # 6. Revenir sur Termux
+            os.system("adb shell am start -n com.termux/.MainActivity")
+            return True # Succès
+        except Exception as e:
+            print(f"❌ Erreur ADB : {e}")
+            return False
 
     async def start_telegram(self):
-        print("\n--- Connexion à Telegram ---")
+        print("\n--- Bot d'Interaction TikTok Lancé ---")
         try:
             await self.client.start()
-            print(f"✅ Connecté !")
             self.client.add_event_handler(self.message_handler, events.NewMessage(chats=TARGET_BOT))
             self.working = True
             await self.client.send_message(TARGET_BOT, 'TikTok')
             await self.client.run_until_disconnected()
         except Exception as e:
-            print(f"❌ Erreur : {e}")
+            print(f"❌ Erreur Telegram : {e}")
 
     async def message_handler(self, event):
         if not self.working: return
         text = event.message.message or ""
         buttons = event.message.buttons
 
-        # --- DÉTECTION DE TÂCHE ET RÉCOMPENSE ---
+        # DETECTION DE TÂCHE
         if "Link :" in text and "Action :" in text:
-            # Extraction des infos
             link_match = re.search(r"Link\s*:\s*(https?://[^\s\n]+)", text)
             action_match = re.search(r"Action\s*:\s*([^\n]+)", text)
             reward_match = re.search(r"Reward\s*:\s*\n?(\d+\.?\d*)", text, re.IGNORECASE)
@@ -116,74 +121,70 @@ class TaskBot:
                 url = link_match.group(1)
                 action = action_match.group(1)
                 reward_val = float(reward_match.group(1)) if reward_match else 0.0
-                current_acc = self.accounts[self.current_account_index]
-
-                print(f"⏳ Tâche trouvée : {action} sur {current_acc}")
                 
-                # EXECUTION DE L'AUTOMATISATION
-                await self.run_adb_interaction(current_acc, url, action)
+                # On utilise l'index actuel + 1 pour correspondre aux chiffres 1, 2, 3 de ta photo
+                account_num = self.current_account_index + 1
+                current_acc_name = self.accounts[self.current_account_index]
 
-                # CLIQUER SUR "COMPLETED" DANS TELEGRAM
-                if buttons:
+                print(f"⚡ Tâche reçue pour {current_acc_name} (Session {account_num})")
+                
+                # --- AUTOMATISATION PHYSIQUE ---
+                success = await self.run_adb_interaction(account_num, url, action)
+
+                # --- VALIDATION SUR TELEGRAM ---
+                # On ne clique sur "Completed" que si ADB a réussi
+                if success and buttons:
                     for i, row in enumerate(buttons):
                         for j, btn in enumerate(row):
                             if "Completed" in btn.text or "✅" in btn.text:
+                                print("✅ Envoi de la confirmation au bot Telegram...")
                                 await event.message.click(i, j)
                                 
-                                # MISE À JOUR STATS
+                                # Mise à jour des stats
                                 self.stats["total_earned"] += reward_val
                                 self.stats["tasks_completed"] += 1
                                 self.save_stats_now()
-                                print(f"💰 +{reward_val} ajouté ! Total : {self.stats['total_earned']:.2f}")
+                                print(f"💰 Gain : +{reward_val} | Total : {self.stats['total_earned']:.2f}")
                                 return
+                else:
+                    print("⚠️ Échec de l'automatisation. Pas de validation envoyée.")
 
-        # --- GESTION DU "SORRY" (PAS DE TÂCHE) ---
+        # GESTION SANS TÂCHE (SORRY)
         elif "Sorry" in text:
-            print(f"❌ Pas de tâche sur : {self.accounts[self.current_account_index]}")
+            print(f"😴 Pas de tâche sur : {self.accounts[self.current_account_index]}")
             self.current_account_index = (self.current_account_index + 1) % len(self.accounts)
-            
-            if self.current_account_index == 0:
-                print("🔄 Cycle terminé. Pause de 10 secondes...")
-                await asyncio.sleep(10)
-            
             await asyncio.sleep(2)
             await self.client.send_message(TARGET_BOT, 'TikTok')
 
-        # --- SÉLECTION DES COMPTES DANS LA LISTE ---
+        # SÉLECTION DU COMPTE
         elif buttons:
             current_target = self.accounts[self.current_account_index]
             for i, row in enumerate(buttons):
                 for j, btn in enumerate(row):
                     if btn.text == current_target:
-                        print(f"👤 Sélection du compte bot : {btn.text}")
-                        await asyncio.sleep(1)
+                        print(f"👤 Switch vers compte : {btn.text}")
                         await event.message.click(i, j)
                         return
-                    if "TikTok" in btn.text:
-                        await asyncio.sleep(1)
-                        await self.client.send_message(TARGET_BOT, 'TikTok')
-                        return
 
-# --- INTERFACE MENU ---
 async def main_menu():
     bot = TaskBot()
     while True:
-        print(f"\n[ SOLDE ACTUEL : {bot.stats['total_earned']:.2f} CashCoins ]")
-        print("[1] Lancer le bot")
-        print("[2] Ajouter un compte (ex: Compte1)")
-        print("[3] Liste des comptes")
-        print("[4] Quitter")
+        print(f"\n--- MENU BOT (Solde: {bot.stats['total_earned']:.2f}) ---")
+        print("[1] Lancer le cycle")
+        print("[2] Ajouter un compte")
+        print("[3] Quitter")
         
-        c = input("Choix : ")
-        if c == '1':
-            if not bot.accounts: print("❌ Aucun compte !"); continue
+        choice = input("Choix : ")
+        if choice == '1':
+            if not bot.accounts: print("❌ Liste de comptes vide !"); continue
             await bot.start_telegram()
-        elif c == '2':
-            name = input("Nom exact du compte (doit correspondre à COORDINATES) : ")
-            if name: bot.accounts.append(name); bot.save_accounts(); print("✅ OK")
-        elif c == '3':
-            print(f"Comptes ({len(bot.accounts)}) :", bot.accounts)
-        elif c == '4': break
+        elif choice == '2':
+            name = input("Nom du compte (ex: ella_renk) : ")
+            if name: 
+                bot.accounts.append(name)
+                with open('accounts.json', 'w') as f: json.dump(bot.accounts, f)
+                print("✅ Ajouté")
+        elif choice == '3': break
 
 if __name__ == '__main__':
     asyncio.run(main_menu())
