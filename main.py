@@ -3,6 +3,8 @@ import json
 import asyncio
 import re
 import subprocess
+import cv2  # Nouvelle librairie pour l'image
+import numpy as np
 from dotenv import load_dotenv
 from telethon import TelegramClient, events
 
@@ -18,22 +20,18 @@ MULTI_APP_PACKAGE = "com.waxmoon.ma.gp/com.waxmoon.mobile.module.home.MainActivi
 TIKTOK_PACKAGE = "com.zhiliaoapp.musically"
 TERMUX_PACKAGE = "com.termux/com.termux.app.TermuxActivity"
 
-# ⚠️ NOUVELLES COORDONNÉES À VÉRIFIER ⚠️
+# 📏 CONFIGURATION DU DÉCALAGE (OFFSET) DU CLIC
+# Tu as demandé : 4cm en bas, 5cm à droite.
+# En pixels (sur un écran standard), cela correspond environ à :
+OFFSET_X = 250  # Vers la droite
+OFFSET_Y = 200  # Vers le bas
+# Si le bot clique trop loin, réduis ces chiffres. S'il ne clique pas assez loin, augmente-les.
+
 COORDINATES = {
     "LIKE_BUTTON": "950 1100",
     "FOLLOW_BUTTON": "950 850",
-    
-    # Bouton Loupe/Recherche en haut à droite dans TikTok
     "SEARCH_ICON": "980 130", 
-    
-    # Premier résultat qui s'affiche après la recherche (cliquer au milieu de la première vidéo/profil)
     "FIRST_RESULT": "300 600",
-    
-    "APP_SLOTS": {
-        1: "540 400",
-        2: "540 700",
-        3: "540 1000",
-    }
 }
 
 load_dotenv()
@@ -69,7 +67,6 @@ class TaskBot:
         with open('stats.json', 'w') as f:
             json.dump(self.stats, f, indent=4)
 
-    # --- DÉTECTION APPAREIL ---
     def detect_device(self):
         try:
             output = subprocess.check_output(["adb", "devices"]).decode("utf-8")
@@ -91,14 +88,53 @@ class TaskBot:
             print(f"{RED}❌ Erreur détection ADB : {e}{RESET}")
             return False
 
-    # --- FONCTION POUR TAPER LE LIEN PROPREMENT ---
     def adb_type_text(self, text):
-        """Écrit du texte via ADB en gérant les caractères spéciaux"""
-        # On remplace les caractères problématiques pour le shell Android
-        # ADB input text n'aime pas trop les &, ?, =. 
-        # Astuce : On échappe les caractères spéciaux
         escaped_text = text.replace("&", "\&").replace("?", "\?").replace("=", "\=")
         os.system(f"{self.adb_prefix} input text \"{escaped_text}\"")
+
+    # --- NOUVELLE FONCTION : DÉTECTION D'IMAGE ---
+    def find_image_and_click(self, target_image_name):
+        """Cherche une image (1.png, 2.png...) et clique avec décalage"""
+        try:
+            print(f"{YELLOW}📸 Recherche visuelle de '{target_image_name}'...{RESET}")
+            
+            # 1. Capture d'écran via ADB
+            os.system(f"adb -s {self.device_id} shell screencap -p /sdcard/screen.png")
+            os.system(f"adb -s {self.device_id} pull /sdcard/screen.png screen.png > /dev/null 2>&1")
+            
+            # 2. Chargement des images avec OpenCV
+            screen_img = cv2.imread('screen.png')
+            target_img = cv2.imread(target_image_name)
+
+            if screen_img is None or target_img is None:
+                print(f"{RED}❌ Erreur : Image '{target_image_name}' ou capture introuvable.{RESET}")
+                return False
+
+            # 3. Recherche (Template Matching)
+            result = cv2.matchTemplate(screen_img, target_img, cv2.TM_CCOEFF_NORMED)
+            min_val, max_val, min_loc, max_loc = cv2.minMaxLoc(result)
+
+            # Seuil de confiance (0.8 = 80% de ressemblance)
+            if max_val >= 0.8:
+                # Position trouvée (coin haut gauche de l'image détectée)
+                found_x, found_y = max_loc
+                
+                # Calcul du point de clic avec le DÉCALAGE (Offset)
+                click_x = found_x + OFFSET_X
+                click_y = found_y + OFFSET_Y
+                
+                print(f"{GREEN}👁️ Trouvé à ({found_x}, {found_y}). Clic décalé à -> {click_x} {click_y}{RESET}")
+                
+                # Exécution du clic
+                os.system(f"{self.adb_prefix} input tap {click_x} {click_y}")
+                return True
+            else:
+                print(f"{RED}❌ Image '{target_image_name}' non trouvée sur l'écran.{RESET}")
+                return False
+
+        except Exception as e:
+            print(f"{RED}❌ Erreur Vision : {e}{RESET}")
+            return False
 
     # --- SÉQUENCE D'AUTOMATISATION ---
     async def run_adb_interaction(self, account_idx, link, action):
@@ -106,48 +142,51 @@ class TaskBot:
             if not self.detect_device(): return False
 
         try:
-            # 0. Nettoyage préalable
             os.system(f"{self.adb_prefix} am force-stop {TIKTOK_PACKAGE}")
             await asyncio.sleep(1)
 
             print(f"{YELLOW}⏳ Ouverture Multi-App...{RESET}")
-            
-            # 1. Ouvrir Multi App
             os.system(f"{self.adb_prefix} am start -n {MULTI_APP_PACKAGE} > /dev/null 2>&1")
-            await asyncio.sleep(6) 
+            await asyncio.sleep(8) 
 
-            # 2. Cliquer sur le profil (Slot correspondant)
-            pos = COORDINATES["APP_SLOTS"].get(account_idx, "540 400")
-            print(f"{BLUE}👉 Sélection du profil n°{account_idx}{RESET}")
-            os.system(f"{self.adb_prefix} input tap {pos}")
+            # --- DÉTECTION VISUELLE ---
+            # On cherche l'image correspondant au numéro du compte (ex: 3.png)
+            target_image = f"{account_idx}.png"
             
-            # Attente importante : le clone doit charger
-            await asyncio.sleep(10) 
+            if os.path.exists(target_image):
+                found = self.find_image_and_click(target_image)
+                if not found:
+                    print(f"{RED}⚠️ Échec visuel. Tentative avec coordonnées par défaut...{RESET}")
+                    # Fallback sur les anciennes coordonnées si l'image échoue
+                    pos = COORDINATES["APP_SLOTS"].get(account_idx, "540 400")
+                    os.system(f"{self.adb_prefix} input tap {pos}")
+            else:
+                print(f"{RED}⚠️ Image '{target_image}' manquante ! Utilisation des coords par défaut.{RESET}")
+                # Fallback manuel
+                fake_coords = {1: "540 400", 2: "540 700", 3: "540 1000"} # Exemple
+                pos = fake_coords.get(account_idx, "540 400")
+                os.system(f"{self.adb_prefix} input tap {pos}")
+            
+            await asyncio.sleep(10) # Temps de chargement du clone
 
-            # 3. NAVIGATION INTERNE (Remplacement de l'ouverture du lien externe)
-            print(f"{YELLOW}🔍 Recherche du contenu dans le clone...{RESET}")
-            
-            # A. Clic sur la Loupe (Recherche)
+            # --- SUITE DU PROGRAMME (RECHERCHE + ACTION) ---
+            print(f"{YELLOW}🔍 Recherche du contenu...{RESET}")
             os.system(f"{self.adb_prefix} input tap {COORDINATES['SEARCH_ICON']}")
             await asyncio.sleep(2)
 
-            # B. Écriture du lien (Tape le lien comme un clavier)
             print(f"{BLUE}⌨️ Écriture du lien...{RESET}")
             self.adb_type_text(link)
             await asyncio.sleep(2)
 
-            # C. Appuyer sur ENTRÉE (Keycode 66)
-            os.system(f"{self.adb_prefix} input keyevent 66")
-            await asyncio.sleep(5) # Attente des résultats de recherche
+            os.system(f"{self.adb_prefix} input keyevent 66") # Entrée
+            await asyncio.sleep(5)
 
-            # D. Cliquer sur le premier résultat
             print(f"{BLUE}👆 Clic sur le résultat...{RESET}")
             os.system(f"{self.adb_prefix} input tap {COORDINATES['FIRST_RESULT']}")
-            await asyncio.sleep(6) # Attente chargement vidéo
+            await asyncio.sleep(6)
 
             print(f"{GREEN}✅ Vidéo/Profil ouvert !{RESET}")
 
-            # 4. Action
             if "Like" in action:
                 os.system(f"{self.adb_prefix} input tap {COORDINATES['LIKE_BUTTON']}")
                 print(f"{GREEN}❤️ J'aime effectué{RESET}")
@@ -157,7 +196,6 @@ class TaskBot:
             
             await asyncio.sleep(3)
 
-            # 5. Fermeture propre
             print(f"{BLUE}🔄 Retour Termux...{RESET}")
             os.system(f"{self.adb_prefix} am force-stop {TIKTOK_PACKAGE}")
             await asyncio.sleep(1)
@@ -201,7 +239,6 @@ class TaskBot:
                 current_acc_name = self.accounts[self.current_account_index]
 
                 print(f"\n{BLUE}⚡ Tâche détectée pour {current_acc_name} (Session {account_num}){RESET}")
-                
                 success = await self.run_adb_interaction(account_num, url, action)
 
                 if success and buttons:
@@ -213,7 +250,6 @@ class TaskBot:
                                 self.stats["total_earned"] += reward_val
                                 self.save_stats_now()
                                 print(f"{GREEN}💰 Tâche validée ! Gain: +{reward_val}{RESET}")
-                                print(f"{BLUE}---------------------------------------------------{RESET}")
                                 return
 
         elif "Sorry" in text:
@@ -234,7 +270,7 @@ class TaskBot:
 async def main_menu():
     bot = TaskBot()
     while True:
-        print(f"\n{BLUE}--- MENU BOT v3 (Solde: {bot.stats['total_earned']:.2f}) ---{RESET}")
+        print(f"\n{BLUE}--- MENU BOT v4 VISION (Solde: {bot.stats['total_earned']:.2f}) ---{RESET}")
         print("[1] Lancer le bot")
         print("[2] Ajouter un compte")
         print("[3] Redétecter ADB")
