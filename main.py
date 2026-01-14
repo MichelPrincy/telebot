@@ -15,10 +15,11 @@ BLUE = "\033[94m"
 CYAN = "\033[96m"
 RESET = "\033[0m"
 
-# ================== CONFIG ==================
-TIKTOK_PACKAGE = "com.zhiliaoapp.musically"
+# ================== PACKAGES ==================
+CLONE_CONTAINER_PACKAGE = "com.waxmoon.ma.gp"
 TERMUX_PACKAGE = "com.termux/com.termux.app.TermuxActivity"
 
+# ================== COORDONNÉES ==================
 APP_CHOOSER = {
     1: "145 2015",
     2: "340 2015",
@@ -27,9 +28,9 @@ APP_CHOOSER = {
 
 LIKE_BUTTON = "990 1200"
 FOLLOW_BUTTON = "350 840"
-
 SWIPE_REFRESH = "900 450 900 980 500"
 
+# ================== TELEGRAM ==================
 load_dotenv()
 API_ID = int(os.getenv("API_ID"))
 API_HASH = os.getenv("API_HASH")
@@ -50,11 +51,11 @@ class TikTokTaskBot:
         self.client = TelegramClient("session_bot", API_ID, API_HASH)
         self.working = False
 
-    # ========== LOG ==========
+    # ---------- LOG ----------
     def log(self, msg, color=RESET):
         print(f"{color}{msg}{RESET}")
 
-    # ========== JSON ==========
+    # ---------- JSON ----------
     def load_json(self, file, default):
         if os.path.exists(file):
             with open(file, "r") as f:
@@ -65,7 +66,7 @@ class TikTokTaskBot:
         with open(file, "w") as f:
             json.dump(data, f, indent=4)
 
-    # ========== ADB ==========
+    # ---------- ADB ----------
     def detect_device(self):
         try:
             out = subprocess.check_output(["adb", "devices"]).decode()
@@ -81,7 +82,7 @@ class TikTokTaskBot:
             self.log(f"ADB ERROR : {e}", RED)
             return False
 
-    # ========== TEST LIEN ==========
+    # ---------- TEST LIEN ----------
     def test_link_alive(self, url):
         try:
             r = requests.head(url, allow_redirects=True, timeout=10)
@@ -89,11 +90,11 @@ class TikTokTaskBot:
         except:
             return False
 
-    # ========== TASK ==========
+    # ---------- TASK ----------
     async def do_task(self, account_idx, link, action):
         try:
-            self.log("🧹 Nettoyage TikTok", BLUE)
-            os.system(f"{self.adb} am force-stop {TIKTOK_PACKAGE}")
+            self.log("🧹 Fermeture complète du clone (WaxMoon)", BLUE)
+            os.system(f"{self.adb} am force-stop {CLONE_CONTAINER_PACKAGE}")
             await asyncio.sleep(1)
 
             if "Like" in action:
@@ -109,11 +110,11 @@ class TikTokTaskBot:
             self.log(f"👉 Sélection clone TikTok #{account_idx}", BLUE)
             os.system(f"{self.adb} input tap {APP_CHOOSER[account_idx]}")
 
-            self.log("⏳ Chargement TikTok (40s)", YELLOW)
+            self.log("⏳ Chargement du clone (40s)", YELLOW)
             await asyncio.sleep(40)
 
             if "Follow" in action or "profile" in action:
-                self.log("🔄 Actualisation du profil", YELLOW)
+                self.log("🔄 Refresh profil", YELLOW)
                 os.system(f"{self.adb} input swipe {SWIPE_REFRESH}")
                 await asyncio.sleep(5)
                 os.system(f"{self.adb} input tap {FOLLOW_BUTTON}")
@@ -124,8 +125,10 @@ class TikTokTaskBot:
                 self.log("❤️ Like effectué", GREEN)
 
             await asyncio.sleep(3)
-            self.log("❌ Fermeture complète TikTok", BLUE)
-            os.system(f"{self.adb} am force-stop {TIKTOK_PACKAGE}")
+
+            self.log("❌ Fermeture du clone (WaxMoon)", BLUE)
+            os.system(f"{self.adb} am force-stop {CLONE_CONTAINER_PACKAGE}")
+            await asyncio.sleep(1)
 
             self.stats["tasks"] += 1
             self.save_json("stats.json", self.stats)
@@ -135,7 +138,7 @@ class TikTokTaskBot:
             self.log(f"❌ ERREUR TASK : {e}", RED)
             return False
 
-    # ========== TELEGRAM ==========
+    # ---------- TELEGRAM ----------
     async def start_telegram(self):
         if not self.detect_device():
             return
@@ -158,7 +161,6 @@ class TikTokTaskBot:
             if link and action:
                 acc = self.accounts[self.index]
                 idx = self.index + 1
-
                 self.log(f"🔍 Recherche task sur le compte : {acc}", BLUE)
                 ok = await self.do_task(idx, link.group(1), action.group(1))
 
@@ -184,16 +186,15 @@ class TikTokTaskBot:
                         await event.message.click(i, j)
                         return
 
-    # ========== MENU ==========
+    # ---------- MENU ----------
     async def menu(self):
         while True:
             clear_screen()
             print(f"""
 {BLUE}╔════════════════════════════════════╗
-║ 🤖 TIKTOK BOT PRO – ADB CLONE       ║
+║ 🤖 TIKTOK BOT PRO – CLONE WAXMOON   ║
 ╠════════════════════════════════════╣
-║ 💰 Gain   : {self.stats['earned']}              ║
-║ 📊 Tasks  : {self.stats['tasks']}              ║
+║ 📊 Tasks : {self.stats['tasks']}               ║
 ╠════════════════════════════════════╣
 ║ 1️⃣  Lancer le bot                  ║
 ║ 2️⃣  Ajouter un compte              ║
@@ -222,7 +223,7 @@ class TikTokTaskBot:
                 self.log("📂 LISTE DES COMPTES", CYAN)
                 for i, acc in enumerate(self.accounts, 1):
                     print(f"{i}. {acc}")
-                input("\nEntrée pour revenir au menu...")
+                input("\nEntrée pour revenir...")
 
             elif choice == "4":
                 self.detect_device()
