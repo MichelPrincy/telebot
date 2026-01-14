@@ -11,15 +11,15 @@ R, G, Y, B, M, C, W = "\033[1;91m", "\033[1;92m", "\033[1;93m", "\033[1;94m", "\
 RESET = "\033[0m"
 
 # --- CONFIGURATION ---
-# Le package principal de TikTok (utile pour forcer l'arrêt)
 TIKTOK_PACKAGE = "com.zhiliaoapp.musically"
 TERMUX_PACKAGE = "com.termux/com.termux.app.TermuxActivity"
 
-# 📍 TES COORDONNÉES EXACTES
-APP_PICKER_SLOTS = {
-    1: "145 2015",  # Position du clone 1 dans le menu "Ouvrir avec"
-    2: "340 2015",  # Position du clone 2
-    3: "535 2015"   # Position du clone 3
+# 📍 NOUVELLES COORDONNÉES (Sélecteur d'app & Actions)
+# Logique : Quand le menu "Ouvrir avec" apparait
+APP_CLONES_COORDS = {
+    1: "145 2015",  # Clone 1
+    2: "340 2015",  # Clone 2
+    3: "535 2015"   # Clone 3
 }
 
 ACTIONS_COORDS = {
@@ -60,71 +60,66 @@ class TaskBot:
             output = subprocess.check_output(["adb", "devices"]).decode("utf-8")
             lines = output.strip().split('\n')[1:]
             devices = [line.split('\t')[0] for line in lines if "\tdevice" in line]
-            if not devices: 
-                print(f"{R}❌ Aucun appareil détecté.{RESET}")
-                return False
+            if not devices: return False
             self.device_id = devices[0]
             self.adb_prefix = f"adb -s {self.device_id} shell"
-            print(f"{G}✅ Appareil connecté : {C}{self.device_id}{RESET}")
             return True
         except: return False
 
     async def run_adb_interaction(self, account_idx, link, action):
         if not self.device_id and not self.detect_device(): return False
 
-        # Vérification si on a les coordonnées pour ce compte
-        picker_coord = APP_PICKER_SLOTS.get(account_idx)
-        if not picker_coord:
-            print(f"{R}❌ Erreur: Pas de coordonnées définies pour le compte {account_idx} (Max 3){RESET}")
+        # On s'assure que l'index du compte correspond à un slot (1, 2 ou 3)
+        # Si tu as plus de 3 comptes, ça boucle (Compte 4 -> Slot 1, etc.)
+        slot_number = ((account_idx - 1) % 3) + 1
+        
+        # Récupération des coordonnées du slot
+        clone_coord = APP_CLONES_COORDS.get(slot_number)
+        
+        if not clone_coord:
+            print(f"{R}❌ Erreur coordonnée slot {slot_number}{RESET}")
             return False
 
         try:
-            # 1. Nettoyage préalable
+            # 1. Nettoyage (Fermer l'ancien TikTok pour éviter les conflits)
             os.system(f"{self.adb_prefix} am force-stop {TIKTOK_PACKAGE}")
-            await asyncio.sleep(0.5)
+            await asyncio.sleep(1)
 
-            # 2. Lancer le lien directement (Intent)
-            print(f"{Y}🚀 Lancement du lien via Android Intent...{RESET}")
-            # Cette commande ouvre le lien et déclenche le menu "Choisir une app"
+            # 2. OUVERTURE DIRECTE DU LIEN (Déclenche le menu "Choisir une app")
+            print(f"{Y}🚀 Ouverture du lien (Intent)...{RESET}")
+            # Cette commande force l'ouverture de l'URL, Android demandera "Avec quelle app ?"
             cmd = f'{self.adb_prefix} am start -a android.intent.action.VIEW -d "{link}" > /dev/null 2>&1'
             os.system(cmd)
 
-            # 3. Attente du menu "Ouvrir avec"
-            print(f"{C}⏱️ Attente du menu de sélection (3s)...{RESET}")
+            # 3. Attente affichage du menu "Ouvrir avec"
             await asyncio.sleep(3)
 
-            # 4. Sélection du Clone
-            print(f"{B}point👉 Clic sur le Clone {account_idx} ({picker_coord}){RESET}")
-            os.system(f"{self.adb_prefix} input tap {picker_coord}")
+            # 4. Sélection du Clone TikTok (1, 2 ou 3)
+            print(f"{B}point👉 Clic sur Clone {slot_number} (Coords: {clone_coord}){RESET}")
+            os.system(f"{self.adb_prefix} input tap {clone_coord}")
 
-            # 5. Attente chargement APP (40 secondes demandées)
-            print(f"{M}⏳ Chargement du TikTok (40s)...{RESET}")
+            # 5. ATTENTE CHARGEMENT (40 secondes)
+            print(f"{C}⏳ Chargement de l'app (40s)...{RESET}")
             await asyncio.sleep(40)
 
-            # 6. Exécution de l'action
-            print(f"{G}⚡ Exécution de l'action...{RESET}")
+            # 6. ACTION (LIKE ou FOLLOW)
             if "Like" in action:
+                print(f"{M}❤️ Click J'aime ({ACTIONS_COORDS['LIKE']}){RESET}")
                 os.system(f"{self.adb_prefix} input tap {ACTIONS_COORDS['LIKE']}")
-                print(f"{Y}❤️ Like envoyé à {ACTIONS_COORDS['LIKE']}{RESET}")
             else:
-                # Follow ou autre
+                print(f"{M}👤 Click Suivre ({ACTIONS_COORDS['FOLLOW']}){RESET}")
                 os.system(f"{self.adb_prefix} input tap {ACTIONS_COORDS['FOLLOW']}")
-                print(f"{Y}👤 Follow envoyé à {ACTIONS_COORDS['FOLLOW']}{RESET}")
             
-            # Petit délai pour valider l'action
             await asyncio.sleep(3)
-
-            # 7. Fermeture propre
-            print(f"{R}🏁 Fermeture de l'application...{RESET}")
+            
+            # 7. Fermeture et Retour Termux
+            print(f"{Y}🏁 Fermeture...{RESET}")
             os.system(f"{self.adb_prefix} am force-stop {TIKTOK_PACKAGE}")
-            
-            # Retour premier plan Termux (Optionnel, mais propre)
             os.system(f"{self.adb_prefix} am start -n {TERMUX_PACKAGE} > /dev/null 2>&1")
-            
             return True
 
         except Exception as e:
-            print(f"{R}❌ Erreur critique : {e}{RESET}")
+            print(f"{R}❌ Erreur Interaction : {e}{RESET}")
             return False
 
     async def start_telegram(self):
@@ -143,42 +138,34 @@ class TaskBot:
     async def message_handler(self, event):
         if not self.working: return
         text = event.message.message or ""
-        # Gestion des boutons si on clique manuellement
+        # Gestion des boutons
         buttons = event.message.buttons
 
         if "Link :" in text and "Action :" in text:
             link_match = re.search(r"Link\s*:\s*(https?://[^\s\n]+)", text)
             action_match = re.search(r"Action\s*:\s*([^\n]+)", text)
-            reward_match = re.search(r"Reward\s*:\s*\n?(\d+\.?\d*)", text, re.IGNORECASE)
-
+            
             if link_match and action_match:
-                url = link_match.group(1)
-                action = action_match.group(1)
-                reward_val = float(reward_match.group(1)) if reward_match else 0.0
+                url, action = link_match.group(1), action_match.group(1)
                 
-                # On détermine quel compte utiliser (1, 2 ou 3)
-                acc_idx = (self.current_account_index % 3) + 1 
-                acc_name = self.accounts[self.current_account_index] if self.accounts else f"Compte {acc_idx}"
-
-                print(f"\n{B}💎 Tâche reçue pour {W}{acc_name}{B} (Slot {acc_idx}){RESET}")
-                print(f"{C}🔗 {url}{RESET}")
+                # Index du compte actuel (1, 2, 3...)
+                acc_idx = self.current_account_index + 1
                 
                 success = await self.run_adb_interaction(acc_idx, url, action)
-
+                
                 if success and buttons:
-                    # Recherche du bouton "Completed"
+                    # Clic automatique sur "Completed"
                     for i, row in enumerate(buttons):
                         for j, btn in enumerate(row):
                             if any(x in btn.text for x in ["Completed", "✅"]):
                                 await asyncio.sleep(2)
                                 await event.message.click(i, j)
-                                self.stats["total_earned"] += reward_val
-                                self.save_stats_now()
-                                print(f"{G}💰 Gain validé (+{reward_val}) ! Total: {self.stats['total_earned']:.2f}{RESET}")
+                                print(f"{G}💰 Tâche validée !{RESET}")
                                 return
 
         elif "Sorry" in text:
             print(f"{Y}💤 Pas de tâche. Changement de compte...{RESET}")
+            # Passage au compte suivant
             self.current_account_index = (self.current_account_index + 1) % len(self.accounts) if self.accounts else 0
             await asyncio.sleep(5)
             await self.client.send_message(TARGET_BOT, 'TikTok')
@@ -190,30 +177,23 @@ async def main_menu():
         print(f"{M}╔════════════════════════════════════════════╗")
         print(f"║{W}   SMM KINGDOM BOT v7 - DIRECT LINK        {M}║")
         print(f"╠════════════════════════════════════════════╣")
-        print(f"║ {G}Solde : {W}{bot.stats['total_earned']:.4f} USD{M}             ║")
-        print(f"║ {B}Comptes chargés : {W}{len(bot.accounts)}{M}                 ║")
-        print(f"╠════════════════════════════════════════════╣")
+        print(f"║ {G}Solde : {W}{bot.stats['total_earned']:.2f} USD{M}              ║")
         print(f"║ {Y}[1]{W} Lancer le Bot                         {M}║")
-        print(f"║ {Y}[2]{W} Ajouter Compte (Nom)                  {M}║")
-        print(f"║ {Y}[3]{W} Tester ADB                            {M}║")
+        print(f"║ {Y}[2]{W} Ajouter Compte                        {M}║")
         print(f"║ {R}[4]{W} Quitter                               {M}║")
         print(f"╚════════════════════════════════════════════╝{RESET}")
-        
         choice = input(f"{C}➤ Choix : {RESET}")
         if choice == '1': 
             if not bot.accounts:
-                print(f"{R}⚠️ Ajoute au moins un compte (Option 2){RESET}")
+                print("Ajoutez d'abord des comptes !")
                 await asyncio.sleep(2)
             else:
                 await bot.start_telegram()
         elif choice == '2':
-            name = input("Nom du compte : ")
+            name = input("Nom : ")
             if name: 
                 bot.accounts.append(name)
                 with open('accounts.json', 'w') as f: json.dump(bot.accounts, f)
-        elif choice == '3':
-            bot.detect_device()
-            await asyncio.sleep(3)
         elif choice == '4': break
 
 if __name__ == '__main__':
