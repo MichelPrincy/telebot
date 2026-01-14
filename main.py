@@ -3,29 +3,31 @@ import json
 import asyncio
 import re
 import subprocess
-import cv2  # Nouvelle librairie pour l'image
 import numpy as np
+from PIL import Image
 from dotenv import load_dotenv
 from telethon import TelegramClient, events
 
-# --- COULEURS ---
-RED = "\033[91m"
-GREEN = "\033[92m"
-YELLOW = "\033[93m"
+# --- SYSTÈME DE COULEURS ÉTENDU ---
+R = "\033[1;91m"  # Rouge vif
+G = "\033[1;92m"  # Vert vif
+Y = "\033[1;93m"  # Jaune vif
+B = "\033[1;94m"  # Bleu vif
+M = "\033[1;95m"  # Magenta
+C = "\033[1;96m"  # Cyan
+W = "\033[1;97m"  # Blanc
 RESET = "\033[0m"
-BLUE = "\033[94m"
+BOLD = "\033[1m"
+UNDERLINE = "\033[4m"
 
 # --- CONFIGURATION ---
 MULTI_APP_PACKAGE = "com.waxmoon.ma.gp/com.waxmoon.mobile.module.home.MainActivity"
 TIKTOK_PACKAGE = "com.zhiliaoapp.musically"
 TERMUX_PACKAGE = "com.termux/com.termux.app.TermuxActivity"
 
-# 📏 CONFIGURATION DU DÉCALAGE (OFFSET) DU CLIC
-# Tu as demandé : 4cm en bas, 5cm à droite.
-# En pixels (sur un écran standard), cela correspond environ à :
-OFFSET_X = 250  # Vers la droite
-OFFSET_Y = 200  # Vers le bas
-# Si le bot clique trop loin, réduis ces chiffres. S'il ne clique pas assez loin, augmente-les.
+# OFFSET DU CLIC (4cm bas / 5cm droite environ)
+OFFSET_X = 250  
+OFFSET_Y = 200  
 
 COORDINATES = {
     "LIKE_BUTTON": "950 1100",
@@ -77,66 +79,81 @@ class TaskBot:
                     authorized_devices.append(line.split('\t')[0])
             
             if not authorized_devices:
-                print(f"{RED}❌ Aucun appareil autorisé trouvé.{RESET}")
+                print(f"{R}❌ Aucun appareil autorisé trouvé.{RESET}")
                 return False
             
             self.device_id = authorized_devices[0]
             self.adb_prefix = f"adb -s {self.device_id} shell"
-            print(f"{GREEN}✅ Appareil détecté : {self.device_id}{RESET}")
+            print(f"{G}✅ Appareil détecté : {C}{self.device_id}{RESET}")
             return True
         except Exception as e:
-            print(f"{RED}❌ Erreur détection ADB : {e}{RESET}")
+            print(f"{R}❌ Erreur détection ADB : {e}{RESET}")
             return False
 
     def adb_type_text(self, text):
         escaped_text = text.replace("&", "\&").replace("?", "\?").replace("=", "\=")
         os.system(f"{self.adb_prefix} input text \"{escaped_text}\"")
 
-    # --- NOUVELLE FONCTION : DÉTECTION D'IMAGE ---
-    def find_image_and_click(self, target_image_name):
-        """Cherche une image (1.png, 2.png...) et clique avec décalage"""
+    # --- REMPLACEMENT DE CV2 PAR PILLOW + NUMPY ---
+    def find_image_and_click(self, target_image_path):
+        """Recherche visuelle utilisant Pillow et Numpy (Template Matching manuel)"""
         try:
-            print(f"{YELLOW}📸 Recherche visuelle de '{target_image_name}'...{RESET}")
+            print(f"{Y}📸 Recherche visuelle : {C}{target_image_path}...{RESET}")
             
-            # 1. Capture d'écran via ADB
+            # Capture d'écran
             os.system(f"adb -s {self.device_id} shell screencap -p /sdcard/screen.png")
             os.system(f"adb -s {self.device_id} pull /sdcard/screen.png screen.png > /dev/null 2>&1")
             
-            # 2. Chargement des images avec OpenCV
-            screen_img = cv2.imread('screen.png')
-            target_img = cv2.imread(target_image_name)
-
-            if screen_img is None or target_img is None:
-                print(f"{RED}❌ Erreur : Image '{target_image_name}' ou capture introuvable.{RESET}")
+            if not os.path.exists('screen.png') or not os.path.exists(target_image_path):
                 return False
 
-            # 3. Recherche (Template Matching)
-            result = cv2.matchTemplate(screen_img, target_img, cv2.TM_CCOEFF_NORMED)
-            min_val, max_val, min_loc, max_loc = cv2.minMaxLoc(result)
+            # Ouvrir avec Pillow et convertir en niveaux de gris (L) pour la vitesse
+            img_screen = Image.open('screen.png').convert('L')
+            img_target = Image.open(target_image_path).convert('L')
 
-            # Seuil de confiance (0.8 = 80% de ressemblance)
-            if max_val >= 0.8:
-                # Position trouvée (coin haut gauche de l'image détectée)
-                found_x, found_y = max_loc
-                
-                # Calcul du point de clic avec le DÉCALAGE (Offset)
+            # Conversion en tableaux Numpy
+            screen_arr = np.array(img_screen)
+            target_arr = np.array(img_target)
+
+            sw, sh = screen_arr.shape[::-1] # Largeur, Hauteur écran
+            tw, th = target_arr.shape[::-1] # Largeur, Hauteur cible
+
+            # On utilise une méthode de corrélation simple par Numpy
+            # Note : Sur Termux, c'est moins rapide que CV2 mais ça fonctionne sans lib complexe
+            # Pour gagner du temps, on peut sous-échantillonner si nécessaire
+            
+            # Recherche de la zone la plus proche (simplifiée)
+            # On cherche le pixel le plus haut/gauche pour démarrer
+            best_val = -1
+            best_loc = (0, 0)
+
+            # Optimisation : On ne scanne qu'une partie de l'écran ou on utilise un pas de 2
+            for y in range(0, sh - th, 10): # Pas de 10 pour la rapidité sur Termux
+                for x in range(0, sw - tw, 10):
+                    region = screen_arr[y:y+th, x:x+tw]
+                    # Mesure de similitude (inverse de la différence absolue moyenne)
+                    diff = np.mean(np.abs(region - target_arr))
+                    if best_val == -1 or diff < best_val:
+                        best_val = diff
+                        best_loc = (x, y)
+
+            # Si la différence moyenne est faible (seuil arbitraire, à ajuster)
+            if best_val < 30: 
+                found_x, found_y = best_loc
                 click_x = found_x + OFFSET_X
                 click_y = found_y + OFFSET_Y
                 
-                print(f"{GREEN}👁️ Trouvé à ({found_x}, {found_y}). Clic décalé à -> {click_x} {click_y}{RESET}")
-                
-                # Exécution du clic
+                print(f"{G}👁️ Trouvé (diff:{best_val:.2f}) -> {C}{click_x} {click_y}{RESET}")
                 os.system(f"{self.adb_prefix} input tap {click_x} {click_y}")
                 return True
             else:
-                print(f"{RED}❌ Image '{target_image_name}' non trouvée sur l'écran.{RESET}")
+                print(f"{R}❌ Image non détectée (Seuil trop haut : {best_val:.2f}){RESET}")
                 return False
 
         except Exception as e:
-            print(f"{RED}❌ Erreur Vision : {e}{RESET}")
+            print(f"{R}❌ Erreur Vision : {e}{RESET}")
             return False
 
-    # --- SÉQUENCE D'AUTOMATISATION ---
     async def run_adb_interaction(self, account_idx, link, action):
         if not self.device_id:
             if not self.detect_device(): return False
@@ -145,72 +162,53 @@ class TaskBot:
             os.system(f"{self.adb_prefix} am force-stop {TIKTOK_PACKAGE}")
             await asyncio.sleep(1)
 
-            print(f"{YELLOW}⏳ Ouverture Multi-App...{RESET}")
+            print(f"{Y}⏳ Ouverture Multi-App...{RESET}")
             os.system(f"{self.adb_prefix} am start -n {MULTI_APP_PACKAGE} > /dev/null 2>&1")
             await asyncio.sleep(8) 
 
-            # --- DÉTECTION VISUELLE ---
-            # On cherche l'image correspondant au numéro du compte (ex: 3.png)
             target_image = f"{account_idx}.png"
-            
             if os.path.exists(target_image):
                 found = self.find_image_and_click(target_image)
                 if not found:
-                    print(f"{RED}⚠️ Échec visuel. Tentative avec coordonnées par défaut...{RESET}")
-                    # Fallback sur les anciennes coordonnées si l'image échoue
-                    pos = COORDINATES["APP_SLOTS"].get(account_idx, "540 400")
-                    os.system(f"{self.adb_prefix} input tap {pos}")
+                    # Fallback
+                    os.system(f"{self.adb_prefix} input tap 540 400")
             else:
-                print(f"{RED}⚠️ Image '{target_image}' manquante ! Utilisation des coords par défaut.{RESET}")
-                # Fallback manuel
-                fake_coords = {1: "540 400", 2: "540 700", 3: "540 1000"} # Exemple
-                pos = fake_coords.get(account_idx, "540 400")
-                os.system(f"{self.adb_prefix} input tap {pos}")
+                os.system(f"{self.adb_prefix} input tap 540 400")
             
-            await asyncio.sleep(10) # Temps de chargement du clone
+            await asyncio.sleep(10)
 
-            # --- SUITE DU PROGRAMME (RECHERCHE + ACTION) ---
-            print(f"{YELLOW}🔍 Recherche du contenu...{RESET}")
+            # --- RECHERCHE ET ACTION ---
+            print(f"{C}🔍 Recherche du contenu...{RESET}")
             os.system(f"{self.adb_prefix} input tap {COORDINATES['SEARCH_ICON']}")
             await asyncio.sleep(2)
-
-            print(f"{BLUE}⌨️ Écriture du lien...{RESET}")
             self.adb_type_text(link)
             await asyncio.sleep(2)
-
-            os.system(f"{self.adb_prefix} input keyevent 66") # Entrée
+            os.system(f"{self.adb_prefix} input keyevent 66") 
             await asyncio.sleep(5)
-
-            print(f"{BLUE}👆 Clic sur le résultat...{RESET}")
             os.system(f"{self.adb_prefix} input tap {COORDINATES['FIRST_RESULT']}")
             await asyncio.sleep(6)
 
-            print(f"{GREEN}✅ Vidéo/Profil ouvert !{RESET}")
-
             if "Like" in action:
                 os.system(f"{self.adb_prefix} input tap {COORDINATES['LIKE_BUTTON']}")
-                print(f"{GREEN}❤️ J'aime effectué{RESET}")
+                print(f"{M}❤️ J'aime effectué{RESET}")
             elif "Follow" in action or "profile" in action:
                 os.system(f"{self.adb_prefix} input tap {COORDINATES['FOLLOW_BUTTON']}")
-                print(f"{GREEN}👤 Follow effectué{RESET}")
+                print(f"{M}👤 Follow effectué{RESET}")
             
             await asyncio.sleep(3)
-
-            print(f"{BLUE}🔄 Retour Termux...{RESET}")
             os.system(f"{self.adb_prefix} am force-stop {TIKTOK_PACKAGE}")
-            await asyncio.sleep(1)
             os.system(f"{self.adb_prefix} am start -n {TERMUX_PACKAGE} > /dev/null 2>&1")
-            
             return True
 
         except Exception as e:
-            print(f"{RED}❌ Erreur séquence : {e}{RESET}")
+            print(f"{R}❌ Erreur séquence : {e}{RESET}")
             return False
 
     async def start_telegram(self):
         if not self.detect_device(): return
-
-        print(f"\n{BLUE}--- Connexion à Telegram ---{RESET}")
+        print(f"\n{M}┏━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━┓")
+        print(f"┃      {W}CONNEXION TELEGRAM EN COURS{M}     ┃")
+        print(f"┗━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━┛{RESET}")
         try:
             await self.client.start()
             self.client.add_event_handler(self.message_handler, events.NewMessage(chats=TARGET_BOT))
@@ -218,7 +216,7 @@ class TaskBot:
             await self.client.send_message(TARGET_BOT, 'TikTok')
             await self.client.run_until_disconnected()
         except Exception as e:
-            print(f"{RED}❌ Erreur Telegram : {e}{RESET}")
+            print(f"{R}❌ Erreur Telegram : {e}{RESET}")
 
     async def message_handler(self, event):
         if not self.working: return
@@ -238,7 +236,7 @@ class TaskBot:
                 account_num = self.current_account_index + 1
                 current_acc_name = self.accounts[self.current_account_index]
 
-                print(f"\n{BLUE}⚡ Tâche détectée pour {current_acc_name} (Session {account_num}){RESET}")
+                print(f"\n{B}⚡ Tâche : {W}{action} {B}sur {C}{current_acc_name}{RESET}")
                 success = await self.run_adb_interaction(account_num, url, action)
 
                 if success and buttons:
@@ -249,13 +247,12 @@ class TaskBot:
                                 await event.message.click(i, j)
                                 self.stats["total_earned"] += reward_val
                                 self.save_stats_now()
-                                print(f"{GREEN}💰 Tâche validée ! Gain: +{reward_val}{RESET}")
+                                print(f"{G}💰 +{reward_val} ajouté ! Total : {self.stats['total_earned']:.2f}{RESET}")
                                 return
 
         elif "Sorry" in text:
-            print(f"{YELLOW}😴 Pas de tâche sur : {self.accounts[self.current_account_index]}{RESET}")
+            print(f"{Y}😴 Pas de tâche sur : {self.accounts[self.current_account_index]}{RESET}")
             self.current_account_index = (self.current_account_index + 1) % len(self.accounts)
-            print(f"{BLUE}🔄 Recherche sur le compte suivant...{RESET}")
             await asyncio.sleep(5)
             await self.client.send_message(TARGET_BOT, 'TikTok')
 
@@ -270,24 +267,37 @@ class TaskBot:
 async def main_menu():
     bot = TaskBot()
     while True:
-        print(f"\n{BLUE}--- MENU BOT v4 VISION (Solde: {bot.stats['total_earned']:.2f}) ---{RESET}")
-        print("[1] Lancer le bot")
-        print("[2] Ajouter un compte")
-        print("[3] Redétecter ADB")
-        print("[4] Quitter")
+        os.system('clear')
+        print(f"{M}╔════════════════════════════════════════════╗{RESET}")
+        print(f"{M}║{W} {BOLD}      SMM KINGDOM BOT v5 - VISION         {RESET}{M} ║{RESET}")
+        print(f"{M}╠════════════════════════════════════════════╣{RESET}")
+        print(f"{M}║{RESET}  {G}💰 SOLDE ACTUEL : {W}{bot.stats['total_earned']:.2f} USD{RESET}          {M}║{RESET}")
+        print(f"{M}║{RESET}  {B}👤 COMPTES : {W}{len(bot.accounts)}{RESET}                      {M}║{RESET}")
+        print(f"{M}╠════════════════════════════════════════════╣{RESET}")
+        print(f"{M}║{RESET}  {Y}[1]{RESET} Lancer l'automatisation           {M}║{RESET}")
+        print(f"{M}║{RESET}  {Y}[2]{RESET} Ajouter un compte (nom)           {M}║{RESET}")
+        print(f"{M}║{RESET}  {Y}[3]{RESET} Redétecter l'appareil ADB         {M}║{RESET}")
+        print(f"{M}║{RESET}  {R}[4]{RESET} Quitter                           {M}║{RESET}")
+        print(f"{M}╚════════════════════════════════════════════╝{RESET}")
         
-        choice = input(f"{YELLOW}Choix : {RESET}")
+        choice = input(f"\n{C}➤ Faire un choix : {RESET}")
         if choice == '1':
-            if not bot.accounts: print(f"{RED}❌ Liste vide !{RESET}"); continue
+            if not bot.accounts: 
+                print(f"{R}❌ Ajoutez d'abord un compte !{RESET}")
+                await asyncio.sleep(2)
+                continue
             await bot.start_telegram()
         elif choice == '2':
-            name = input("Nom du compte : ")
+            name = input(f"{W}Nom du compte (ex: Session1) : {RESET}")
             if name: 
                 bot.accounts.append(name)
                 with open('accounts.json', 'w') as f: json.dump(bot.accounts, f)
         elif choice == '3':
             bot.detect_device()
-        elif choice == '4': break
+            await asyncio.sleep(2)
+        elif choice == '4':
+            print(f"{Y}Au revoir !{RESET}")
+            break
 
 if __name__ == '__main__':
     asyncio.run(main_menu())
