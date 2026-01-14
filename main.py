@@ -3,10 +3,11 @@ import json
 import asyncio
 import re
 import subprocess
+import requests
 from dotenv import load_dotenv
 from telethon import TelegramClient, events
 
-# ====== COULEURS TERMINAL ======
+# ================== COULEURS ==================
 RED = "\033[91m"
 GREEN = "\033[92m"
 YELLOW = "\033[93m"
@@ -14,11 +15,10 @@ BLUE = "\033[94m"
 CYAN = "\033[96m"
 RESET = "\033[0m"
 
-# ====== PACKAGES ======
+# ================== CONFIG ==================
 TIKTOK_PACKAGE = "com.zhiliaoapp.musically"
 TERMUX_PACKAGE = "com.termux/com.termux.app.TermuxActivity"
 
-# ====== COORDONNÉES ======
 APP_CHOOSER = {
     1: "145 2015",
     2: "340 2015",
@@ -28,11 +28,16 @@ APP_CHOOSER = {
 LIKE_BUTTON = "990 1200"
 FOLLOW_BUTTON = "350 840"
 
-# ====== TELEGRAM ======
+SWIPE_REFRESH = "900 450 900 980 500"
+
 load_dotenv()
 API_ID = int(os.getenv("API_ID"))
 API_HASH = os.getenv("API_HASH")
 TARGET_BOT = "@SmmKingdomTasksBot"
+
+# ================== UTILS ==================
+def clear_screen():
+    os.system("cls" if os.name == "nt" else "clear")
 
 
 class TikTokTaskBot:
@@ -45,7 +50,11 @@ class TikTokTaskBot:
         self.client = TelegramClient("session_bot", API_ID, API_HASH)
         self.working = False
 
-    # ====== UTILS ======
+    # ========== LOG ==========
+    def log(self, msg, color=RESET):
+        print(f"{color}{msg}{RESET}")
+
+    # ========== JSON ==========
     def load_json(self, file, default):
         if os.path.exists(file):
             with open(file, "r") as f:
@@ -56,7 +65,7 @@ class TikTokTaskBot:
         with open(file, "w") as f:
             json.dump(data, f, indent=4)
 
-    # ====== ADB ======
+    # ========== ADB ==========
     def detect_device(self):
         try:
             out = subprocess.check_output(["adb", "devices"]).decode()
@@ -64,62 +73,74 @@ class TikTokTaskBot:
                 if "\tdevice" in line:
                     self.device_id = line.split("\t")[0]
                     self.adb = f"adb -s {self.device_id} shell"
-                    print(f"{GREEN}✔ Device détecté : {self.device_id}{RESET}")
+                    self.log(f"✔ Device détecté : {self.device_id}", GREEN)
                     return True
-            print(f"{RED}❌ Aucun device autorisé{RESET}")
+            self.log("❌ Aucun appareil autorisé", RED)
             return False
         except Exception as e:
-            print(f"{RED}ADB ERROR : {e}{RESET}")
+            self.log(f"ADB ERROR : {e}", RED)
             return False
 
-    # ====== ADB TASK ======
+    # ========== TEST LIEN ==========
+    def test_link_alive(self, url):
+        try:
+            r = requests.head(url, allow_redirects=True, timeout=10)
+            return r.status_code < 400
+        except:
+            return False
+
+    # ========== TASK ==========
     async def do_task(self, account_idx, link, action):
         try:
+            self.log("🧹 Nettoyage TikTok", BLUE)
             os.system(f"{self.adb} am force-stop {TIKTOK_PACKAGE}")
             await asyncio.sleep(1)
 
-            print(f"{CYAN}🔗 Ouverture lien TikTok{RESET}")
+            if "Like" in action:
+                self.log("🔎 Test disponibilité du lien", CYAN)
+                if not self.test_link_alive(link):
+                    self.log("❌ Lien invalide ou supprimé", RED)
+                    return False
+
+            self.log("🔗 Ouverture du lien TikTok", CYAN)
             os.system(f'{self.adb} am start -a android.intent.action.VIEW -d "{link}"')
             await asyncio.sleep(3)
 
-            pos = APP_CHOOSER.get(account_idx)
-            if not pos:
-                print(f"{RED}Clone inexistant{RESET}")
-                return False
+            self.log(f"👉 Sélection clone TikTok #{account_idx}", BLUE)
+            os.system(f"{self.adb} input tap {APP_CHOOSER[account_idx]}")
 
-            print(f"{BLUE}👉 Clone TikTok #{account_idx}{RESET}")
-            os.system(f"{self.adb} input tap {pos}")
-
-            print(f"{YELLOW}⏳ Chargement TikTok...{RESET}")
+            self.log("⏳ Chargement TikTok (40s)", YELLOW)
             await asyncio.sleep(40)
 
-            if "Like" in action:
-                os.system(f"{self.adb} input tap {LIKE_BUTTON}")
-                print(f"{GREEN}❤️ Like OK{RESET}")
-
-            elif "Follow" in action or "profile" in action:
+            if "Follow" in action or "profile" in action:
+                self.log("🔄 Actualisation du profil", YELLOW)
+                os.system(f"{self.adb} input swipe {SWIPE_REFRESH}")
+                await asyncio.sleep(5)
                 os.system(f"{self.adb} input tap {FOLLOW_BUTTON}")
-                print(f"{GREEN}👤 Follow OK{RESET}")
+                self.log("👤 Follow tenté", GREEN)
+
+            elif "Like" in action:
+                os.system(f"{self.adb} input tap {LIKE_BUTTON}")
+                self.log("❤️ Like effectué", GREEN)
 
             await asyncio.sleep(3)
+            self.log("❌ Fermeture complète TikTok", BLUE)
             os.system(f"{self.adb} am force-stop {TIKTOK_PACKAGE}")
-            os.system(f"{self.adb} am start -n {TERMUX_PACKAGE}")
 
-            self.stats["earned"] += 0
             self.stats["tasks"] += 1
             self.save_json("stats.json", self.stats)
             return True
 
         except Exception as e:
-            print(f"{RED}TASK ERROR : {e}{RESET}")
+            self.log(f"❌ ERREUR TASK : {e}", RED)
             return False
 
-    # ====== TELEGRAM ======
+    # ========== TELEGRAM ==========
     async def start_telegram(self):
         if not self.detect_device():
             return
 
-        print(f"{CYAN}Connexion Telegram...{RESET}")
+        self.log("📡 Connexion Telegram...", CYAN)
         await self.client.start()
         self.client.add_event_handler(self.on_message, events.NewMessage(chats=TARGET_BOT))
         self.working = True
@@ -130,7 +151,7 @@ class TikTokTaskBot:
         text = event.message.message or ""
         buttons = event.message.buttons
 
-        if "Link :" in text:
+        if "Link :" in text and "Action :" in text:
             link = re.search(r"Link\s*:\s*(https?://\S+)", text)
             action = re.search(r"Action\s*:\s*(.+)", text)
 
@@ -138,7 +159,7 @@ class TikTokTaskBot:
                 acc = self.accounts[self.index]
                 idx = self.index + 1
 
-                print(f"\n{BLUE}⚡ TASK | {acc} | Clone #{idx}{RESET}")
+                self.log(f"🔍 Recherche task sur le compte : {acc}", BLUE)
                 ok = await self.do_task(idx, link.group(1), action.group(1))
 
                 if ok and buttons:
@@ -146,10 +167,11 @@ class TikTokTaskBot:
                         for j, btn in enumerate(row):
                             if "Completed" in btn.text or "✅" in btn.text:
                                 await event.message.click(i, j)
-                                print(f"{GREEN}✔ Task validée{RESET}")
-                                break
+                                self.log("✅ Task validée", GREEN)
+                                return
 
         elif "Sorry" in text:
+            self.log("😴 Aucune task trouvée", YELLOW)
             self.index = (self.index + 1) % len(self.accounts)
             await asyncio.sleep(4)
             await self.client.send_message(TARGET_BOT, "TikTok")
@@ -160,36 +182,32 @@ class TikTokTaskBot:
                 for j, btn in enumerate(row):
                     if btn.text == target:
                         await event.message.click(i, j)
+                        return
 
-    # ====== MENU ======
-    def show_accounts(self):
-        print(f"\n{CYAN}📂 LISTE DES COMPTES{RESET}")
-        for i, acc in enumerate(self.accounts, 1):
-            print(f"{i}. {acc}")
-        print("-" * 30)
-
+    # ========== MENU ==========
     async def menu(self):
         while True:
+            clear_screen()
             print(f"""
-{BLUE}╔════════════════════════════════╗
-║   🤖 TIKTOK BOT PRO (ADB)       ║
-╠════════════════════════════════╣
-║ 💰 Gain : {self.stats['earned']}               ║
-║ 📊 Tasks : {self.stats['tasks']}               ║
-╠════════════════════════════════╣
-║ 1️⃣  Lancer le bot               ║
-║ 2️⃣  Ajouter un compte           ║
-║ 3️⃣  Voir les comptes            ║
-║ 4️⃣  Redétecter ADB              ║
-║ 5️⃣  Quitter                     ║
-╚════════════════════════════════╝
+{BLUE}╔════════════════════════════════════╗
+║ 🤖 TIKTOK BOT PRO – ADB CLONE       ║
+╠════════════════════════════════════╣
+║ 💰 Gain   : {self.stats['earned']}              ║
+║ 📊 Tasks  : {self.stats['tasks']}              ║
+╠════════════════════════════════════╣
+║ 1️⃣  Lancer le bot                  ║
+║ 2️⃣  Ajouter un compte              ║
+║ 3️⃣  Voir les comptes               ║
+║ 4️⃣  Redétecter ADB                 ║
+║ 5️⃣  Quitter                        ║
+╚════════════════════════════════════╝
 """)
-
-            choice = input(f"{YELLOW}Choix ➜ {RESET}")
+            choice = input("Choix ➜ ")
 
             if choice == "1":
                 if not self.accounts:
-                    print(f"{RED}Aucun compte !{RESET}")
+                    self.log("❌ Aucun compte ajouté", RED)
+                    input("Entrée pour continuer...")
                 else:
                     await self.start_telegram()
 
@@ -200,17 +218,22 @@ class TikTokTaskBot:
                     self.save_json("accounts.json", self.accounts)
 
             elif choice == "3":
-                self.show_accounts()
+                clear_screen()
+                self.log("📂 LISTE DES COMPTES", CYAN)
+                for i, acc in enumerate(self.accounts, 1):
+                    print(f"{i}. {acc}")
+                input("\nEntrée pour revenir au menu...")
 
             elif choice == "4":
                 self.detect_device()
+                input("Entrée pour continuer...")
 
             elif choice == "5":
-                print("Bye 👋")
+                self.log("👋 Arrêt du bot", GREEN)
                 break
 
 
-# ====== MAIN ======
+# ================== MAIN ==================
 if __name__ == "__main__":
     bot = TikTokTaskBot()
     asyncio.run(bot.menu())
