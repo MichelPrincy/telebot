@@ -17,7 +17,7 @@ RESET = "\033[0m"
 
 # ================== PACKAGES ==================
 MULTI_APP_PACKAGE = "com.waxmoon.ma.gp"
-TERMUX_PACKAGE = "com.termux/com.termux.app.TermuxActivity"
+TERMUX_PACKAGE = "com.termux"
 
 # ================== COORDONNÉES ==================
 APP_CHOOSER = {
@@ -74,21 +74,22 @@ class TikTokTaskBot:
                 self.adb = f"adb -s {self.device_id} shell"
                 self.log(f"✔ Device détecté : {self.device_id}", GREEN)
                 return True
-        self.log("❌ Aucun device ADB", RED)
+        self.log("❌ Aucun appareil détecté", RED)
         return False
 
+    # ---------- KILL APPS ----------
     def close_all_except(self):
-        self.log("🧹 Fermeture apps inutiles", BLUE)
-        out = subprocess.check_output(f"{self.adb} pm list packages", shell=True).decode()
-        for line in out.splitlines():
-            pkg = line.replace("package:", "").strip()
-            if not pkg.startswith("com.termux") and not pkg.startswith("com.waxmoon.ma.gp"):
+        out = subprocess.getoutput(f"{self.adb} dumpsys activity activities")
+        packages = set(re.findall(r"package=([a-zA-Z0-9._]+)", out))
+
+        for pkg in packages:
+            if pkg not in [TERMUX_PACKAGE, MULTI_APP_PACKAGE]:
                 os.system(f"{self.adb} am force-stop {pkg}")
 
-    def back_to_termux(self):
-        os.system(f"{self.adb} am start -n {TERMUX_PACKAGE}")
+    def bring_termux_front(self):
+        os.system(f"{self.adb} monkey -p {TERMUX_PACKAGE} -c android.intent.category.LAUNCHER 1")
 
-    # ---------- LIEN ----------
+    # ---------- TEST LIEN ----------
     def test_link_alive(self, url):
         try:
             r = requests.head(url, timeout=10, allow_redirects=True)
@@ -96,41 +97,49 @@ class TikTokTaskBot:
         except:
             return False
 
+    # ---------- EXECUTION LIKE / FOLLOW ----------
+    async def execute_action(self, idx, link, action):
+        self.log("🔗 Ouverture du lien TikTok", CYAN)
+        os.system(f'{self.adb} am start -a android.intent.action.VIEW -d "{link}"')
+        await asyncio.sleep(3)
+
+        self.log(f"👉 Choix clone #{idx}", BLUE)
+        os.system(f"{self.adb} input tap {APP_CHOOSER[idx]}")
+        await asyncio.sleep(40)
+
+        if "Like" in action:
+            os.system(f"{self.adb} input tap {LIKE_BUTTON}")
+            self.log("❤️ Like effectué", GREEN)
+
+        else:
+            os.system(f"{self.adb} input swipe {SWIPE_REFRESH}")
+            await asyncio.sleep(4)
+            os.system(f"{self.adb} input tap {FOLLOW_BUTTON}")
+            self.log("👤 Follow effectué", GREEN)
+
+        await asyncio.sleep(3)
+        os.system(f"{self.adb} am force-stop {MULTI_APP_PACKAGE}")
+        await asyncio.sleep(1)
+        self.bring_termux_front()
+
     # ---------- TASK ----------
-    async def do_task(self, acc_idx, link, action):
+    async def do_task(self, idx, link, action):
         self.close_all_except()
 
         if "Like" in action and not self.test_link_alive(link):
-            self.log("❌ lien invalide", RED)
+            self.log("❌ Lien invalide", RED)
             return False
 
-        for round in range(2):
-            self.log(f"🔗 ouverture lien (tentative {round+1})", CYAN)
-            os.system(f'{self.adb} am start -a android.intent.action.VIEW -d "{link}"')
-            await asyncio.sleep(3)
-
-            self.log(f"👉 choix clone #{acc_idx}", BLUE)
-            os.system(f"{self.adb} input tap {APP_CHOOSER[acc_idx]}")
-            await asyncio.sleep(40)
-
-            if "Follow" in action:
-                os.system(f"{self.adb} input swipe {SWIPE_REFRESH}")
-                await asyncio.sleep(3)
-                os.system(f"{self.adb} input tap {FOLLOW_BUTTON}")
-                self.log("👤 follow effectué", GREEN)
-            else:
-                os.system(f"{self.adb} input tap {LIKE_BUTTON}")
-                self.log("❤️ like effectué", GREEN)
-
-            await asyncio.sleep(3)
-            os.system(f"{self.adb} am force-stop {MULTI_APP_PACKAGE}")
-            self.back_to_termux()
+        for i in range(2):
+            self.log(f"🔁 Exécution {i+1}/2", YELLOW)
+            await self.execute_action(idx, link, action)
 
         self.stats["tasks"] += 1
-        self.stats["earned"] += 1.1
+        self.stats["earned"] += 13.1
         self.save_json("stats.json", self.stats)
-        self.log("like valide", GREEN)
-        self.log(f"{self.stats['tasks']} + 1.1 cashcoins", CYAN)
+
+        self.log("❤️ Action valide", GREEN)
+        self.log("💰 Gain : 12 + 1.1 CashCoins", CYAN)
         return True
 
     # ---------- TELEGRAM ----------
@@ -146,24 +155,30 @@ class TikTokTaskBot:
         text = event.message.message or ""
         buttons = event.message.buttons
 
-        acc = self.accounts[self.index]
-        self.log(f"recherche de task sur le compte : {acc}", BLUE)
+        if "Link :" in text:
+            link = re.search(r"(https?://\S+)", text).group(1)
+            action = "Like" if "Like" in text else "Follow"
 
-        if "Link :" in text and "Action :" in text:
-            link = re.search(r"Link\s*:\s*(https?://\S+)", text)
-            action = re.search(r"Action\s*:\s*(.+)", text)
-            if link and action:
-                self.log(f"task trouvée, lien : {link.group(1)}  type : {action.group(1)}", CYAN)
-                ok = await self.do_task(self.index+1, link.group(1), action.group(1))
-                if ok and buttons:
-                    for i, row in enumerate(buttons):
-                        for j, btn in enumerate(row):
-                            if "Completed" in btn.text:
-                                await event.message.click(i, j)
-                                return
+            acc = self.accounts[self.index]
+            idx = self.index + 1
 
-        else:
-            self.log("pas de task sur ce compte", YELLOW)
+            self.log(f"\n🔍 Recherche de task sur le compte : {acc}", BLUE)
+            self.log(f"🔗 Lien : {link}", CYAN)
+            self.log(f"🎯 Type : {action}", YELLOW)
+
+            ok = await self.do_task(idx, link, action)
+
+            if ok and buttons:
+                for i, row in enumerate(buttons):
+                    for j, btn in enumerate(row):
+                        if "Completed" in btn.text:
+                            await event.message.click(i, j)
+                            return
+
+        elif "Sorry" in text:
+            acc = self.accounts[self.index]
+            self.log(f"\n🔍 Recherche de task sur le compte : {acc}", BLUE)
+            self.log("😴 Pas de task sur ce compte", YELLOW)
             self.index = (self.index + 1) % len(self.accounts)
             await asyncio.sleep(3)
             await self.client.send_message(TARGET_BOT, "TikTok")
@@ -174,18 +189,19 @@ class TikTokTaskBot:
             clear_screen()
             print(f"""
 {BLUE}╔════════════════════════════════════╗
-║ 🤖 TIKTOK BOT WAXMOON PRO           ║
+║ 🤖 TIKTOK BOT – WAXMOON PRO         ║
 ╠════════════════════════════════════╣
-║ 📊 Tasks : {self.stats['tasks']}   ║
+║ 📊 Tasks : {self.stats['tasks']}              ║
+║ 💰 Gains : {self.stats['earned']} CC         ║
 ╠════════════════════════════════════╣
-║ 1️⃣  Lancer le bot                  ║
-║ 2️⃣  Ajouter un compte              ║
-║ 3️⃣  Voir les comptes               ║
-║ 4️⃣  Redétecter ADB                 ║
-║ 5️⃣  Quitter                        ║
+║ 1️⃣ Lancer le bot                   ║
+║ 2️⃣ Ajouter un compte               ║
+║ 3️⃣ Voir les comptes                ║
+║ 4️⃣ Quitter                         ║
 ╚════════════════════════════════════╝
 """)
             c = input("Choix ➜ ")
+
             if c == "1":
                 await self.start_telegram()
             elif c == "2":
@@ -193,12 +209,9 @@ class TikTokTaskBot:
                 self.save_json("accounts.json", self.accounts)
             elif c == "3":
                 for i, a in enumerate(self.accounts, 1):
-                    print(i, a)
+                    print(f"{i}. {a}")
                 input("Entrée...")
             elif c == "4":
-                self.detect_device()
-                input("Entrée...")
-            elif c == "5":
                 break
 
 
