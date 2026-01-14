@@ -123,7 +123,7 @@ class TikTokTaskBot:
             os.system(f"{self.adb} input tap {coord_clone}")
             
             self.log("⏳ Attente de 40s (chargement vidéo)...", YELLOW)
-            await asyncio.sleep(30)
+            await asyncio.sleep(40)
 
             # Exécution de l'action
             if "Follow" in action or "profile" in action:
