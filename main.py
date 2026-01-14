@@ -20,11 +20,14 @@ RESET = "\033[0m"
 CLONE_CONTAINER_PACKAGE = "com.waxmoon.ma.gp"
 TERMUX_PACKAGE = "com.termux/com.termux.app.TermuxActivity"
 
-# ================== COORDONNÉES ==================
+# ================== COORDONNÉES (Mises à jour 6 comptes) ==================
 APP_CHOOSER = {
-    1: "145 2015",
-    2: "340 2015",
-    3: "535 2015",
+    1: "150 1800",
+    2: "350 1800",
+    3: "530 1800",
+    4: "740 1800",
+    5: "930 1800",
+    6: "150 2015",
 }
 
 LIKE_BUTTON = "990 1200"
@@ -101,11 +104,12 @@ class TikTokTaskBot:
     def focus_termux(self):
         os.system(f"{self.adb} am start --activity-brought-to-front {TERMUX_PACKAGE}")
 
-    # ---------- ACTIONS TIKTOK (NOUVELLE LOGIQUE) ----------
+    # ---------- ACTIONS TIKTOK (DOUBLE TENTATIVE) ----------
     async def do_task(self, account_idx, link, action):
         try:
             self.cleanup_apps()
-            coord_clone = APP_CHOOSER.get(account_idx, "145 2015")
+            # Récupération coordonnée (défaut sur le 1er si index inconnu)
+            coord_clone = APP_CHOOSER.get(account_idx, "150 1800")
 
             # --- PREMIÈRE TENTATIVE (OUVERTURE UNIQUEMENT) ---
             self.log(f"1ère tentative : Ouverture pour préparation...", CYAN)
@@ -113,8 +117,8 @@ class TikTokTaskBot:
             await asyncio.sleep(4)
             os.system(f"{self.adb} input tap {coord_clone}")
             
-            self.log("⏳ Attente de 40s (pré-chargement)...", YELLOW)
-            await asyncio.sleep(30) # On attend 40s, l'app reste ouverte
+            self.log("⏳ Attente de 30s (pré-chargement)...", YELLOW)
+            await asyncio.sleep(30) # On attend, l'app reste ouverte
 
             # --- DEUXIÈME TENTATIVE (OUVERTURE + ACTION) ---
             self.log(f"2ème tentative : Ouverture finale et action...", CYAN)
