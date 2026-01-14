@@ -13,11 +13,13 @@ GREEN = "\033[92m"
 YELLOW = "\033[93m"
 BLUE = "\033[94m"
 CYAN = "\033[96m"
+MAGENTA = "\033[95m"
 RESET = "\033[0m"
 
 # ================== PACKAGES ==================
-MULTI_APP_PACKAGE = "com.waxmoon.ma.gp"
-TERMUX_PACKAGE = "com.termux"
+CLONE_CONTAINER_PACKAGE = "com.waxmoon.ma.gp"
+MULTI_APP_MAIN = "com.waxmoon.ma.gp/com.waxmoon.mobile.module.home.MainActivity"
+TERMUX_PACKAGE = "com.termux/com.termux.app.TermuxActivity"
 
 # ================== COORDONNÉES ==================
 APP_CHOOSER = {
@@ -38,8 +40,7 @@ TARGET_BOT = "@SmmKingdomTasksBot"
 
 # ================== UTILS ==================
 def clear_screen():
-    os.system("cls" if os.name == "nt" else "clear")
-
+    os.system("clear")
 
 class TikTokTaskBot:
     def __init__(self):
@@ -49,12 +50,11 @@ class TikTokTaskBot:
         self.device_id = None
         self.adb = "adb shell"
         self.client = TelegramClient("session_bot", API_ID, API_HASH)
+        self.working = False
 
-    # ---------- LOG ----------
     def log(self, msg, color=RESET):
         print(f"{color}{msg}{RESET}")
 
-    # ---------- JSON ----------
     def load_json(self, file, default):
         if os.path.exists(file):
             with open(file, "r") as f:
@@ -65,89 +65,90 @@ class TikTokTaskBot:
         with open(file, "w") as f:
             json.dump(data, f, indent=4)
 
-    # ---------- ADB ----------
     def detect_device(self):
-        out = subprocess.check_output(["adb", "devices"]).decode()
-        for line in out.splitlines():
-            if "\tdevice" in line:
-                self.device_id = line.split("\t")[0]
-                self.adb = f"adb -s {self.device_id} shell"
-                self.log(f"✔ Device détecté : {self.device_id}", GREEN)
-                return True
-        self.log("❌ Aucun appareil détecté", RED)
-        return False
-
-    # ---------- KILL APPS ----------
-    def close_all_except(self):
-        out = subprocess.getoutput(f"{self.adb} dumpsys activity activities")
-        packages = set(re.findall(r"package=([a-zA-Z0-9._]+)", out))
-
-        for pkg in packages:
-            if pkg not in [TERMUX_PACKAGE, MULTI_APP_PACKAGE]:
-                os.system(f"{self.adb} am force-stop {pkg}")
-
-    def bring_termux_front(self):
-        os.system(f"{self.adb} monkey -p {TERMUX_PACKAGE} -c android.intent.category.LAUNCHER 1")
-
-    # ---------- TEST LIEN ----------
-    def test_link_alive(self, url):
         try:
-            r = requests.head(url, timeout=10, allow_redirects=True)
-            return r.status_code < 400
-        except:
+            out = subprocess.check_output(["adb", "devices"]).decode()
+            for line in out.splitlines():
+                if "\tdevice" in line:
+                    self.device_id = line.split("\t")[0]
+                    self.adb = f"adb -s {self.device_id} shell"
+                    self.log(f"✔ Device détecté : {self.device_id}", GREEN)
+                    return True
+            self.log("❌ Aucun appareil détecté", RED)
+            return False
+        except Exception as e:
+            self.log(f"ADB ERROR : {e}", RED)
             return False
 
-    # ---------- EXECUTION LIKE / FOLLOW ----------
-    async def execute_action(self, idx, link, action):
-        self.log("🔗 Ouverture du lien TikTok", CYAN)
-        os.system(f'{self.adb} am start -a android.intent.action.VIEW -d "{link}"')
-        await asyncio.sleep(3)
+    # ---------- GESTION DES APPS ----------
+    def cleanup_apps(self):
+        """Ferme tout sauf Termux et le Multi-App principal"""
+        self.log("🧹 Nettoyage des applications en cours...", YELLOW)
+        # On force l'arrêt du container avant de commencer
+        os.system(f"{self.adb} am force-stop {CLONE_CONTAINER_PACKAGE}")
+        # On peut ajouter d'autres apps connues à fermer ici si besoin
+        os.system(f"{self.adb} am kill-all") 
+        # On s'assure que Termux reste actif (normalement il l'est puisqu'on tourne dedans)
 
-        self.log(f"👉 Choix clone #{idx}", BLUE)
-        os.system(f"{self.adb} input tap {APP_CHOOSER[idx]}")
-        await asyncio.sleep(40)
+    def focus_termux(self):
+        """Ramène Termux au premier plan"""
+        os.system(f"{self.adb} am start --activity-brought-to-front {TERMUX_PACKAGE}")
 
-        if "Like" in action:
-            os.system(f"{self.adb} input tap {LIKE_BUTTON}")
-            self.log("❤️ Like effectué", GREEN)
-
-        else:
-            os.system(f"{self.adb} input swipe {SWIPE_REFRESH}")
+    # ---------- CORE TASK ----------
+    async def perform_single_action(self, account_idx, link, action):
+        """Une seule itération : Ouvrir -> Action -> Fermer"""
+        try:
+            # Ouverture du lien
+            os.system(f'{self.adb} am start -a android.intent.action.VIEW -d "{link}"')
             await asyncio.sleep(4)
-            os.system(f"{self.adb} input tap {FOLLOW_BUTTON}")
-            self.log("👤 Follow effectué", GREEN)
 
-        await asyncio.sleep(3)
-        os.system(f"{self.adb} am force-stop {MULTI_APP_PACKAGE}")
-        await asyncio.sleep(1)
-        self.bring_termux_front()
+            # Sélection du clone
+            os.system(f"{self.adb} input tap {APP_CHOOSER[account_idx]}")
+            
+            # Attente chargement (réduit à 30s pour efficacité, à ajuster si besoin)
+            await asyncio.sleep(30)
 
-    # ---------- TASK ----------
-    async def do_task(self, idx, link, action):
-        self.close_all_except()
+            if "Follow" in action or "profile" in action:
+                os.system(f"{self.adb} input swipe {SWIPE_REFRESH}")
+                await asyncio.sleep(4)
+                os.system(f"{self.adb} input tap {FOLLOW_BUTTON}")
+            else:
+                os.system(f"{self.adb} input tap {LIKE_BUTTON}")
 
-        if "Like" in action and not self.test_link_alive(link):
-            self.log("❌ Lien invalide", RED)
+            await asyncio.sleep(3)
+            
+            # Fermeture du clone
+            os.system(f"{self.adb} am force-stop {CLONE_CONTAINER_PACKAGE}")
+            return True
+        except Exception as e:
+            self.log(f"Erreur durant l'action : {e}", RED)
             return False
 
-        for i in range(2):
-            self.log(f"🔁 Exécution {i+1}/2", YELLOW)
-            await self.execute_action(idx, link, action)
+    async def do_task(self, account_idx, link, action):
+        self.cleanup_apps()
+        
+        # --- RÉPÉTITION DE LA MÉTHODE 2 FOIS ---
+        for i in range(1, 3):
+            self.log(f"🔄 Exécution itération {i}/2...", CYAN)
+            success = await self.perform_single_action(account_idx, link, action)
+            if not success: return False
+            await asyncio.sleep(2)
 
-        self.stats["tasks"] += 1
-        self.stats["earned"] += 13.1
-        self.save_json("stats.json", self.stats)
-
-        self.log("❤️ Action valide", GREEN)
-        self.log("💰 Gain : 12 + 1.1 CashCoins", CYAN)
+        # Retour final sur Termux
+        self.focus_termux()
         return True
 
-    # ---------- TELEGRAM ----------
+    # ---------- TELEGRAM HANDLER ----------
     async def start_telegram(self):
-        if not self.detect_device():
-            return
+        if not self.detect_device(): return
+        self.log("📡 Connexion Telegram...", CYAN)
         await self.client.start()
         self.client.add_event_handler(self.on_message, events.NewMessage(chats=TARGET_BOT))
+        self.working = True
+        
+        # Premier lancement
+        acc = self.accounts[self.index]
+        self.log(f"\nrecherche de task sur le compte: {acc}...", MAGENTA)
         await self.client.send_message(TARGET_BOT, "TikTok")
         await self.client.run_until_disconnected()
 
@@ -155,33 +156,62 @@ class TikTokTaskBot:
         text = event.message.message or ""
         buttons = event.message.buttons
 
-        if "Link :" in text:
-            link = re.search(r"(https?://\S+)", text).group(1)
-            action = "Like" if "Like" in text else "Follow"
+        # 1. Détection de Task
+        if "Link :" in text and "Action :" in text:
+            link_match = re.search(r"Link\s*:\s*(https?://\S+)", text)
+            action_match = re.search(r"Action\s*:\s*(.+)", text)
 
+            if link_match and action_match:
+                link = link_match.group(1)
+                action_type = action_match.group(1)
+                
+                self.log(f"task trouver, lien: {link}   type: {action_type}", GREEN)
+                
+                idx = self.index + 1
+                ok = await self.do_task(idx, link, action_type)
+
+                if ok and buttons:
+                    for i, row in enumerate(buttons):
+                        for j, btn in enumerate(row):
+                            if "Completed" in btn.text or "✅" in btn.text:
+                                await event.message.click(i, j)
+                                return
+
+        # 2. Détection de validation (Gain de coins)
+        elif "added" in text.lower() or "success" in text.lower() or "+" in text:
+            # On essaie d'extraire le montant si présent
+            gain = re.search(r"(\+?\d+(\.\d+)?)", text)
+            gain_str = gain.group(1) if gain else "1.1"
+            
+            self.log(f"\n✅ validation réussie", GREEN)
+            self.log(f"12 + {gain_str} cashcoins", YELLOW)
+            
+            # Relancer la recherche
             acc = self.accounts[self.index]
-            idx = self.index + 1
+            self.log(f"\nrecherche de task sur le compte: {acc}...", MAGENTA)
+            await asyncio.sleep(2)
+            await self.client.send_message(TARGET_BOT, "TikTok")
 
-            self.log(f"\n🔍 Recherche de task sur le compte : {acc}", BLUE)
-            self.log(f"🔗 Lien : {link}", CYAN)
-            self.log(f"🎯 Type : {action}", YELLOW)
-
-            ok = await self.do_task(idx, link, action)
-
-            if ok and buttons:
-                for i, row in enumerate(buttons):
-                    for j, btn in enumerate(row):
-                        if "Completed" in btn.text:
-                            await event.message.click(i, j)
-                            return
-
-        elif "Sorry" in text:
-            acc = self.accounts[self.index]
-            self.log(f"\n🔍 Recherche de task sur le compte : {acc}", BLUE)
-            self.log("😴 Pas de task sur ce compte", YELLOW)
+        # 3. Aucun task trouvé
+        elif "Sorry" in text or "No more" in text:
+            self.log(f"pas de task sur ce compte.", RED)
+            
+            # Passer au compte suivant
             self.index = (self.index + 1) % len(self.accounts)
+            acc = self.accounts[self.index]
+            
+            self.log(f"\nrecherche de task sur le compte: {acc}...", MAGENTA)
             await asyncio.sleep(3)
             await self.client.send_message(TARGET_BOT, "TikTok")
+
+        # 4. Sélection du compte au début
+        elif buttons:
+            target = self.accounts[self.index]
+            for i, row in enumerate(buttons):
+                for j, btn in enumerate(row):
+                    if btn.text == target:
+                        await event.message.click(i, j)
+                        return
 
     # ---------- MENU ----------
     async def menu(self):
@@ -189,33 +219,37 @@ class TikTokTaskBot:
             clear_screen()
             print(f"""
 {BLUE}╔════════════════════════════════════╗
-║ 🤖 TIKTOK BOT – WAXMOON PRO         ║
+║ 🤖 TIKTOK BOT PRO – CLONE WAXMOON  ║
 ╠════════════════════════════════════╣
-║ 📊 Tasks : {self.stats['tasks']}              ║
-║ 💰 Gains : {self.stats['earned']} CC         ║
+║ 📊 Comptes actifs : {len(self.accounts)}              ║
 ╠════════════════════════════════════╣
-║ 1️⃣ Lancer le bot                   ║
-║ 2️⃣ Ajouter un compte               ║
-║ 3️⃣ Voir les comptes                ║
-║ 4️⃣ Quitter                         ║
+║ 1️⃣  Lancer le bot                  ║
+║ 2️⃣  Ajouter un compte               ║
+║ 3️⃣  Voir les comptes               ║
+║ 4️⃣  Quitter                         ║
 ╚════════════════════════════════════╝
 """)
-            c = input("Choix ➜ ")
-
-            if c == "1":
-                await self.start_telegram()
-            elif c == "2":
-                self.accounts.append(input("Nom compte : "))
-                self.save_json("accounts.json", self.accounts)
-            elif c == "3":
-                for i, a in enumerate(self.accounts, 1):
-                    print(f"{i}. {a}")
-                input("Entrée...")
-            elif c == "4":
+            choice = input("Choix ➜ ")
+            if choice == "1":
+                if not self.accounts:
+                    print("❌ Ajoute un compte d'abord")
+                    await asyncio.sleep(2)
+                else:
+                    await self.start_telegram()
+            elif choice == "2":
+                name = input("Nom exact du compte TikTok : ")
+                if name:
+                    self.accounts.append(name)
+                    self.save_json("accounts.json", self.accounts)
+            elif choice == "3":
+                print(self.accounts)
+                input("\nEntrée pour continuer...")
+            elif choice == "4":
                 break
 
-
-# ================== MAIN ==================
 if __name__ == "__main__":
     bot = TikTokTaskBot()
-    asyncio.run(bot.menu())
+    try:
+        asyncio.run(bot.menu())
+    except KeyboardInterrupt:
+        print("\nArrêt demandé.")
