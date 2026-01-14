@@ -114,7 +114,7 @@ class TikTokTaskBot:
             os.system(f"{self.adb} input tap {coord_clone}")
             
             self.log("⏳ Attente de 40s (pré-chargement)...", YELLOW)
-            await asyncio.sleep(40) # On attend 40s, l'app reste ouverte
+            await asyncio.sleep(30) # On attend 40s, l'app reste ouverte
 
             # --- DEUXIÈME TENTATIVE (OUVERTURE + ACTION) ---
             self.log(f"2ème tentative : Ouverture finale et action...", CYAN)
@@ -123,7 +123,7 @@ class TikTokTaskBot:
             os.system(f"{self.adb} input tap {coord_clone}")
             
             self.log("⏳ Attente de 40s (chargement vidéo)...", YELLOW)
-            await asyncio.sleep(40)
+            await asyncio.sleep(30)
 
             # Exécution de l'action
             if "Follow" in action or "profile" in action:
