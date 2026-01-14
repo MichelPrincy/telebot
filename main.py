@@ -101,34 +101,52 @@ class TikTokTaskBot:
     def focus_termux(self):
         os.system(f"{self.adb} am start --activity-brought-to-front {TERMUX_PACKAGE}")
 
-    # ---------- ACTIONS TIKTOK ----------
-    async def perform_single_action(self, account_idx, link, action):
+    # ---------- ACTIONS TIKTOK (NOUVELLE LOGIQUE) ----------
+    async def do_task(self, account_idx, link, action):
         try:
+            self.cleanup_apps()
+            coord_clone = APP_CHOOSER.get(account_idx, "145 2015")
+
+            # --- PREMIÈRE TENTATIVE (OUVERTURE UNIQUEMENT) ---
+            self.log(f"1ère tentative : Ouverture pour préparation...", CYAN)
             os.system(f'{self.adb} am start -a android.intent.action.VIEW -d "{link}"')
             await asyncio.sleep(4)
-            os.system(f"{self.adb} input tap {APP_CHOOSER.get(account_idx, '145 2015')}")
-            await asyncio.sleep(35) # Temps de chargement clone
+            os.system(f"{self.adb} input tap {coord_clone}")
+            
+            self.log("⏳ Attente de 40s (pré-chargement)...", YELLOW)
+            await asyncio.sleep(40) # On attend 40s, l'app reste ouverte
 
+            # --- DEUXIÈME TENTATIVE (OUVERTURE + ACTION) ---
+            self.log(f"2ème tentative : Ouverture finale et action...", CYAN)
+            os.system(f'{self.adb} am start -a android.intent.action.VIEW -d "{link}"')
+            await asyncio.sleep(4)
+            os.system(f"{self.adb} input tap {coord_clone}")
+            
+            self.log("⏳ Attente de 40s (chargement vidéo)...", YELLOW)
+            await asyncio.sleep(40)
+
+            # Exécution de l'action
             if "Follow" in action or "profile" in action:
+                self.log("🔄 Refresh profil et Follow...", BLUE)
                 os.system(f"{self.adb} input swipe {SWIPE_REFRESH}")
-                await asyncio.sleep(4)
+                await asyncio.sleep(5)
                 os.system(f"{self.adb} input tap {FOLLOW_BUTTON}")
             else:
+                self.log("❤️ Like en cours...", BLUE)
                 os.system(f"{self.adb} input tap {LIKE_BUTTON}")
 
-            await asyncio.sleep(3)
+            await asyncio.sleep(5)
+            
+            # Fermeture définitive du clone
+            self.log("🧹 Fermeture du clone et retour Termux", CYAN)
             os.system(f"{self.adb} am force-stop {CLONE_CONTAINER_PACKAGE}")
+            self.focus_termux()
             return True
-        except: return False
 
-    async def do_task(self, account_idx, link, action):
-        self.cleanup_apps()
-        for i in range(1, 3):
-            self.log(f"🔄 Itération {i}/2...", CYAN)
-            await self.perform_single_action(account_idx, link, action)
-            await asyncio.sleep(2)
-        self.focus_termux()
-        return True
+        except Exception as e:
+            self.log(f"❌ Erreur Task : {e}", RED)
+            os.system(f"{self.adb} am force-stop {CLONE_CONTAINER_PACKAGE}")
+            return False
 
     # ---------- TELEGRAM ----------
     async def start_telegram(self):
@@ -213,10 +231,12 @@ class TikTokTaskBot:
                 print("\n[S] Supprimer un compte | [Any] Retour")
                 cmd = input("➜ ").lower()
                 if cmd == "s":
-                    num = int(input("Numéro à supprimer : ")) - 1
-                    if 0 <= num < len(self.accounts):
-                        del self.accounts[num]
-                        self.save_json("accounts.json", self.accounts)
+                    try:
+                        num = int(input("Numéro à supprimer : ")) - 1
+                        if 0 <= num < len(self.accounts):
+                            del self.accounts[num]
+                            self.save_json("accounts.json", self.accounts)
+                    except: pass
             elif choice == "4":
                 self.detect_device()
             elif choice == "5":
