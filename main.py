@@ -42,7 +42,6 @@ SWIPE_REFRESH = "900 450 900 980 500"
 # --- COORDONNÉES COMMENTAIRE ---
 COMMENT_ICON = "990 1382"
 COMMENT_INPUT_FIELD = "400 2088"
-# Nouvelles coordonnées spécifiques pour le coller
 INPUT_AREA_LONG_PRESS = "500 960" # Zone pour appui long
 PASTE_BUTTON_UI = "150 795"       # Bouton "Coller" qui apparait
 COMMENT_SEND_BUTTON = "980 1130"
@@ -70,8 +69,8 @@ class TikTokTaskBot:
         self.device_id = None
         self.adb = "adb shell"
         self.client = TelegramClient("session_bot", API_ID, API_HASH)
-        
         self.current_reward = 0.0 
+        self.last_action_type = "" # Pour savoir si c'était un like ou un com
 
     def log(self, msg, color=RESET):
         print(f"{color}{msg}{RESET}")
@@ -132,55 +131,61 @@ class TikTokTaskBot:
             os.system(f"{self.adb} input tap {coord_clone}")
             await asyncio.sleep(25) # Attente chargement vidéo
 
-            # 2. Réouverture (Refresh pour éviter les bugs de chargement)
+            # 2. Réouverture (Refresh)
             os.system(f'{self.adb} am start -a android.intent.action.VIEW -d "{link}" > /dev/null 2>&1')
             await asyncio.sleep(3)
             os.system(f"{self.adb} input tap {coord_clone}")
-            await asyncio.sleep(8)
+            
+            # --- STRICT : ATTENTE 10S AVANT INTERACTION ---
+            self.log("⏳ Attente stricte 10s...", YELLOW)
+            await asyncio.sleep(10)
 
             # ACTION
             action_lower = action.lower()
 
             if "comment" in action_lower:
+                self.last_action_type = "COMMENTAIRE"
                 if comment_text:
+                    # A. METTRE EN PAUSE (Strictement avant d'appuyer sur commentaire)
+                    os.system(f"{self.adb} input tap {PAUSE_VIDEO}")
+                    await asyncio.sleep(5)
+
                     self.log(f"   ✍️ Copier/Coller du commentaire...", CYAN)
                     
-                    # 1. Copier le texte dans le presse-papier Termux pour qu'il soit dispo sur Android
+                    # B. COPIER DANS PRESSE-PAPIER ANDROID (Termux API)
                     safe_comment = comment_text.replace('"', '\\"').replace('`', '\\`').replace('$', '\\$')
                     os.system(f'termux-clipboard-set "{safe_comment}"')
                     await asyncio.sleep(1)
 
-                    # 2. Ouvrir les commentaires
+                    # C. OUVRIR COMMENTAIRES
                     os.system(f"{self.adb} input tap {COMMENT_ICON}")
                     await asyncio.sleep(3)
                     
-                    # 3. Cliquer sur le champ input
+                    # D. CLIQUER INPUT
                     os.system(f"{self.adb} input tap {COMMENT_INPUT_FIELD}")
                     await asyncio.sleep(2)
                     
-                    # --- NOUVELLE SÉQUENCE COLLER ---
-                    # A. Appui long sur 500 960 pendant 1.5s (1500ms)
-                    # Syntaxe swipe x1 y1 x2 y2 duration
+                    # E. SEQUENCE COLLER (Appui long -> Coller)
                     os.system(f"{self.adb} input swipe {INPUT_AREA_LONG_PRESS} {INPUT_AREA_LONG_PRESS} 1500")
-                    await asyncio.sleep(2)
-                    
-                    # B. Clic sur le bouton "Coller" (150 795)
+                    await asyncio.sleep(1.5)
                     os.system(f"{self.adb} input tap {PASTE_BUTTON_UI}")
-                    await asyncio.sleep(2)
+                    await asyncio.sleep(1)
                     
-                    # C. Envoyer
+                    # F. ENVOYER
                     os.system(f"{self.adb} input tap {COMMENT_SEND_BUTTON}")
                 else:
                     self.log(f"   ❌ ERREUR: Pas de texte de commentaire reçu.", RED)
                     return False
             
             elif "follow" in action_lower or "profile" in action_lower:
+                self.last_action_type = "FOLLOW"
                 self.log(f"   👤 Ajout en ami (Follow)...", CYAN)
                 os.system(f"{self.adb} input swipe {SWIPE_REFRESH}")
                 await asyncio.sleep(4)
                 os.system(f"{self.adb} input tap {FOLLOW_BUTTON}")
             
             else:
+                self.last_action_type = "LIKE"
                 self.log(f"   ❤️ Like de la vidéo...", CYAN)
                 os.system(f"{self.adb} input tap {PAUSE_VIDEO}")
                 await asyncio.sleep(1)
@@ -238,38 +243,17 @@ class TikTokTaskBot:
                 reward_match = re.search(r"Reward\s*:\s*([\d\.]+)", text)
                 self.current_reward = float(reward_match.group(1)) if reward_match else 0.0
                 
-                # --- AFFICHAGE ETAPE PAR ETAPE ---
                 print(f"\n{DIM}----------------------------------------{RESET}")
-                print(f"{GREEN}🎯 Tâche trouvée !{RESET}")
                 
-                clean_action = "❤️ LIKE"
                 comment_content = None
-
-                if "Follow" in action: clean_action = "👤 FOLLOW"
-                
-                # GESTION SPÉCIALE COMMENTAIRE
                 if "comment" in action.lower():
-                    clean_action = "💬 COMMENTAIRE"
-                    print(f"⚡ Type : {clean_action}")
-                    print(f"{CYAN}🔍 Récupération du commentaire...{RESET}")
-                    
                     await asyncio.sleep(1) 
-                    
                     history = await self.client.get_messages(TARGET_BOT, limit=1)
                     if history:
                         last_msg = history[0]
                         if last_msg.id != event.message.id:
                             comment_content = last_msg.text
-                            print(f"{WHITE}📝 Commentaire : {BOLD}{comment_content}{RESET}")
-                        else:
-                            print(f"{RED}⚠️ Impossible de récupérer le texte (Message unique ?){RESET}")
-                    else:
-                        print(f"{RED}⚠️ Erreur historique vide.{RESET}")
-
-                else:
-                     print(f"⚡ Type : {clean_action}")
-
-                print(f"💰 Récompense prévue : {YELLOW}{self.current_reward} CC{RESET}")
+                
                 print(f"{YELLOW}⏳ Exécution en cours...{RESET}")
                 
                 success = await self.do_task(self.index + 1, full_link, action, comment_content)
@@ -282,7 +266,7 @@ class TikTokTaskBot:
                                     await event.message.click(i, j)
                                     return
 
-        # --- 2. VALIDATION & COMPTAGE ARGENT ---
+        # --- 2. VALIDATION & LOGS PERSONNALISÉS ---
         elif "added" in text.lower() or "credited" in text.lower():
             # Essai de capture du montant dans le message de confirmation
             gain_match = re.search(r"\+?\s*([\d\.]+)\s*CC", text)
@@ -290,7 +274,6 @@ class TikTokTaskBot:
             if gain_match:
                  gain = float(gain_match.group(1))
             elif self.current_reward > 0:
-                # Si le regex échoue mais qu'on avait une récompense prévue, on l'utilise
                 gain = self.current_reward
             else:
                 gain = 0.0
@@ -303,22 +286,21 @@ class TikTokTaskBot:
                 self.stats["tasks"] += 1
                 self.save_json("stats.json", self.stats)
 
-                print(f"{BOLD}{GREEN}✅ Tâche validée !{RESET}")
-                print(f"{BOLD}{MAGENTA}💵 Balance : {old_balance:.2f} + {gain} = {new_balance:.2f} CC{RESET}")
-                print(f"{DIM}----------------------------------------{RESET}")
+                # --- AFFICHAGE STRICT DEMANDÉ ---
+                action_name = "❤️ like" if "LIKE" in self.last_action_type else "💬 commentaire"
+                if "FOLLOW" in self.last_action_type: action_name = "👤 follow"
+
+                print(f"{BOLD}{CYAN}{action_name} du video{RESET}")
+                print(f"{GREEN}Video {action_name.split()[-1]}r avec success{RESET}") # ex: Video liker avec success
+                print(f"{MAGENTA}{old_balance:.1f} + {gain} cashcoint = {new_balance:.1f} cashcoint{RESET}")
             
-            # --- MODIFICATION : ATTENTE DE 4 SECONDES ---
-            print(f"{DIM}⏳ Attente de 4 secondes avant la suite...{RESET}")
-            await asyncio.sleep(4)
-            
-            current_acc = self.accounts[self.index]
-            print(f"\n{WHITE}👉 Tâche suivante pour : {CYAN}{current_acc}{RESET}")
+            # --- SUITE RAPIDE (Pas de task sur ce compte ou suivante) ---
+            await asyncio.sleep(2)
             await self.client.send_message(TARGET_BOT, "TikTok")
 
         # --- 3. PAS DE TASK ---
         elif "Sorry" in text or "No more" in text:
-            print(f"{RED}🚫 Plus de tâches sur ce compte.{RESET}")
-            print(f"{DIM}   Passage au compte suivant...{RESET}")
+            print(f"{RED}🚫 Pas de task sur ce compte.{RESET}")
             
             self.index = (self.index + 1) % len(self.accounts)
             next_acc = self.accounts[self.index]
@@ -350,18 +332,18 @@ class TikTokTaskBot:
 
             print(f"""
 {CYAN}╔═══════════════════════════════════════════════╗
-║           {BOLD}🤖 TIKTOK AUTOMATION BOT V3.0.2{RESET}{CYAN}          ║
+║            {BOLD}🤖 TIKTOK AUTOMATION BOT V3.0.3{RESET}{CYAN}           ║
 ╠═══════════════════════════════════════════════╣
 ║ 📱 État Appareil : {adb_status}{CYAN}                 ║
-║ 👥 Comptes Chargés : {WHITE}{acc_count}{CYAN}                        ║
-║ 💰 Total Gagné : {YELLOW}{total_earned:.2f} CashCoins{CYAN}             ║
+║ 👥 Comptes Chargés : {WHITE}{acc_count}{CYAN}                         ║
+║ 💰 Total Gagné : {YELLOW}{total_earned:.2f} CashCoins{CYAN}              ║
 ╠═══════════════════════════════════════════════╣
-║ {WHITE}1️⃣   ▶️  LANCER LE BOT{CYAN}                         ║
-║ {WHITE}2️⃣   ➕  AJOUTER DES COMPTES (Boucle){CYAN}         ║
-║ {WHITE}3️⃣   📋  LISTE DES COMPTES{CYAN}                     ║
-║ {WHITE}4️⃣   🔄  REDÉTECTER ADB{CYAN}                        ║
-║ {WHITE}5️⃣   ☁️  MISE À JOUR (GITHUB){CYAN}                  ║
-║ {WHITE}6️⃣   ❌  QUITTER{CYAN}                              ║
+║ {WHITE}1️⃣    ▶️  LANCER LE BOT{CYAN}                          ║
+║ {WHITE}2️⃣    ➕  AJOUTER DES COMPTES (Boucle){CYAN}         ║
+║ {WHITE}3️⃣    📋  LISTE DES COMPTES{CYAN}                      ║
+║ {WHITE}4️⃣    🔄  REDÉTECTER ADB{CYAN}                         ║
+║ {WHITE}5️⃣    ☁️  MISE À JOUR (GITHUB){CYAN}                  ║
+║ {WHITE}6️⃣    ❌  QUITTER{CYAN}                               ║
 ╚═══════════════════════════════════════════════╝{RESET}
 """)
             choice = input(f"{BOLD}➜ Ton choix : {RESET}")
