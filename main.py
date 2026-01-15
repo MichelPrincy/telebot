@@ -52,7 +52,7 @@ try:
     API_ID = int(os.getenv("API_ID"))
     API_HASH = os.getenv("API_HASH")
 except:
-    print(f"{RED}Erreur: API_ID ou API_HASH manquant dans le fichier .env{RESET}")
+    print(f"{RED}Erreur: API_ID ou API_HASH manquant dans le fichier .env{RESET}", flush=True)
     exit()
 
 TARGET_BOT = "@SmmKingdomTasksBot"
@@ -86,14 +86,14 @@ class TikTokTaskBot:
 
     # ---------- MISE À JOUR ----------
     def update_script(self):
-        print(f"{CYAN}🌐 Vérification mise à jour...{RESET}")
+        print(f"{CYAN}🌐 Vérification mise à jour...{RESET}", flush=True)
         url = "https://raw.githubusercontent.com/MichelPrincy/telebot/main/main.py"
         try:
             response = requests.get(url)
             if response.status_code == 200:
                 with open("main.py", "w") as f:
                     f.write(response.text)
-                print(f"{GREEN}✅ Mise à jour installée.{RESET}")
+                print(f"{GREEN}✅ Mise à jour installée.{RESET}", flush=True)
                 exit()
         except Exception: pass
 
@@ -134,7 +134,7 @@ class TikTokTaskBot:
             os.system(f"{self.adb} input tap {coord_clone}")
             
             # --- STRICT : ATTENTE 10S AVANT INTERACTION ---
-            print(f"{YELLOW}⏳ Attente stricte 10s...{RESET}")
+            print(f"{YELLOW}⏳ Attente stricte 10s...{RESET}", flush=True)
             await asyncio.sleep(10)
 
             # ACTION
@@ -143,15 +143,23 @@ class TikTokTaskBot:
             if "comment" in action_lower:
                 self.last_action_type = "COMMENTAIRE"
                 if comment_text:
-                    # A. METTRE EN PAUSE (Strictement avant d'appuyer sur commentaire)
+                    # A. METTRE EN PAUSE
                     os.system(f"{self.adb} input tap {PAUSE_VIDEO}")
                     await asyncio.sleep(1)
 
-                    print(f"{CYAN}   ✍️ Copier/Coller du commentaire...{RESET}")
+                    print(f"{CYAN}   ✍️ Copier/Coller du commentaire...{RESET}", flush=True)
                     
                     # B. COPIER DANS PRESSE-PAPIER ANDROID (Termux API)
+                    # CORRECTION DU FREEZE ICI : Utilisation de subprocess avec TIMEOUT
                     safe_comment = comment_text.replace('"', '\\"').replace('`', '\\`').replace('$', '\\$')
-                    os.system(f'termux-clipboard-set "{safe_comment}"')
+                    try:
+                        # On attend max 2 secondes, sinon on continue pour ne pas bloquer le bot
+                        subprocess.run(f'termux-clipboard-set "{safe_comment}"', shell=True, timeout=2)
+                    except subprocess.TimeoutError:
+                        print(f"{RED}   ⚠️ Le presse-papier Termux est lent, on continue...{RESET}", flush=True)
+                    except Exception as e:
+                        print(f"{RED}   ⚠️ Erreur presse-papier: {e}{RESET}", flush=True)
+                    
                     await asyncio.sleep(1)
 
                     # C. OUVRIR COMMENTAIRES
@@ -171,19 +179,19 @@ class TikTokTaskBot:
                     # F. ENVOYER
                     os.system(f"{self.adb} input tap {COMMENT_SEND_BUTTON}")
                 else:
-                    print(f"{RED}   ❌ ERREUR: Pas de texte de commentaire reçu.{RESET}")
+                    print(f"{RED}   ❌ ERREUR: Pas de texte de commentaire reçu.{RESET}", flush=True)
                     return False
             
             elif "follow" in action_lower or "profile" in action_lower:
                 self.last_action_type = "FOLLOW"
-                print(f"{CYAN}   👤 Ajout en ami (Follow)...{RESET}")
+                print(f"{CYAN}   👤 Ajout en ami (Follow)...{RESET}", flush=True)
                 os.system(f"{self.adb} input swipe {SWIPE_REFRESH}")
                 await asyncio.sleep(4)
                 os.system(f"{self.adb} input tap {FOLLOW_BUTTON}")
             
             else:
                 self.last_action_type = "LIKE"
-                print(f"{CYAN}   ❤️ Like de la vidéo...{RESET}")
+                print(f"{CYAN}   ❤️ Like de la vidéo...{RESET}", flush=True)
                 os.system(f"{self.adb} input tap {PAUSE_VIDEO}")
                 await asyncio.sleep(1)
                 os.system(f"{self.adb} input tap {LIKE_BUTTON}")
@@ -194,13 +202,13 @@ class TikTokTaskBot:
             return True
 
         except Exception as e:
-            print(f"Erreur ADB: {e}")
+            print(f"Erreur ADB: {e}", flush=True)
             return False
 
     # ---------- TELEGRAM ----------
     async def start_telegram(self):
         if not self.detect_device():
-            print(f"{RED}❌ ADB non détecté. Vérifie ta connexion USB/Wifi.{RESET}")
+            print(f"{RED}❌ ADB non détecté. Vérifie ta connexion USB/Wifi.{RESET}", flush=True)
             input("Appuie sur Entrée pour revenir au menu...")
             return
         
@@ -209,11 +217,11 @@ class TikTokTaskBot:
         self.client.add_event_handler(self.on_message, events.NewMessage(chats=TARGET_BOT))
         
         if not self.accounts:
-            print(f"{RED}⚠️ Aucun compte configuré !{RESET}")
+            print(f"{RED}⚠️ Aucun compte configuré !{RESET}", flush=True)
             return
 
         current_acc = self.accounts[self.index]
-        print(f"\n{BOLD}{WHITE}🚀 Démarrage sur le compte : {CYAN}{current_acc}{RESET}")
+        print(f"\n{BOLD}{WHITE}🚀 Démarrage sur le compte : {CYAN}{current_acc}{RESET}", flush=True)
         await self.client.send_message(TARGET_BOT, "TikTok")
         await self.client.run_until_disconnected()
 
@@ -240,7 +248,9 @@ class TikTokTaskBot:
                 reward_match = re.search(r"Reward\s*:\s*([\d\.]+)", text)
                 self.current_reward = float(reward_match.group(1)) if reward_match else 0.0
                 
-                print(f"\n{DIM}----------------------------------------{RESET}")
+                print(f"\n{DIM}----------------------------------------{RESET}", flush=True)
+                print(f"{WHITE}🔗 Link: {DIM}{full_link[:30]}...{RESET}", flush=True)
+                print(f"{WHITE}⚡ Action: {BOLD}{action}{RESET}", flush=True)
                 
                 comment_content = None
                 if "comment" in action.lower():
@@ -251,7 +261,7 @@ class TikTokTaskBot:
                         if last_msg.id != event.message.id:
                             comment_content = last_msg.text
                 
-                print(f"{YELLOW}⏳ Exécution en cours...{RESET}")
+                print(f"{YELLOW}⏳ Exécution en cours...{RESET}", flush=True)
                 
                 success = await self.do_task(self.index + 1, full_link, action, comment_content)
                 
@@ -287,9 +297,9 @@ class TikTokTaskBot:
                 action_name = "❤️ like" if "LIKE" in self.last_action_type else "💬 commentaire"
                 if "FOLLOW" in self.last_action_type: action_name = "👤 follow"
 
-                print(f"{BOLD}{CYAN}{action_name} du video{RESET}")
-                print(f"{GREEN}Video {action_name.split()[-1]}r avec success{RESET}") 
-                print(f"{MAGENTA}{old_balance:.1f} + {gain} cashcoint = {new_balance:.1f} cashcoint{RESET}")
+                print(f"{BOLD}{CYAN}{action_name} du video{RESET}", flush=True)
+                print(f"{GREEN}Video {action_name.split()[-1]}r avec success{RESET}", flush=True) 
+                print(f"{MAGENTA}{old_balance:.1f} + {gain} cashcoint = {new_balance:.1f} cashcoint{RESET}", flush=True)
             
             # --- SUITE RAPIDE ---
             await asyncio.sleep(2)
@@ -297,13 +307,13 @@ class TikTokTaskBot:
 
         # --- 3. PAS DE TASK ---
         elif "Sorry" in text or "No more" in text:
-            print(f"{RED}🚫 Pas de task sur ce compte.{RESET}")
+            print(f"{RED}🚫 Pas de task sur ce compte.{RESET}", flush=True)
             
             self.index = (self.index + 1) % len(self.accounts)
             next_acc = self.accounts[self.index]
             
             await asyncio.sleep(2)
-            print(f"\n{WHITE}🔍 Recherche sur : {CYAN}{next_acc}{RESET}")
+            print(f"\n{WHITE}🔍 Recherche sur : {CYAN}{next_acc}{RESET}", flush=True)
             await self.client.send_message(TARGET_BOT, "TikTok")
 
         # --- 4. GESTION BOUTONS COMPTE (SELECTION) ---
@@ -317,7 +327,7 @@ class TikTokTaskBot:
                         clicked = True
                         return
             if not clicked and "Select account" in text:
-                 print(f"{RED}Compte {target} introuvable dans le menu bot.{RESET}")
+                 print(f"{RED}Compte {target} introuvable dans le menu bot.{RESET}", flush=True)
 
     # ---------- MENU PRINCIPAL ----------
     async def menu(self):
@@ -329,7 +339,7 @@ class TikTokTaskBot:
 
             print(f"""
 {CYAN}╔═══════════════════════════════════════════════╗
-║            {BOLD}🤖 TIKTOK AUTOMATION BOT V3.0.4{RESET}{CYAN}           ║
+║            {BOLD}🤖 TIKTOK AUTOMATION BOT V3.0.5{RESET}{CYAN}           ║
 ╠═══════════════════════════════════════════════╣
 ║ 📱 État Appareil : {adb_status}{CYAN}                 ║
 ║ 👥 Comptes Chargés : {WHITE}{acc_count}{CYAN}                         ║
@@ -342,7 +352,7 @@ class TikTokTaskBot:
 ║ {WHITE}5️⃣    ☁️  MISE À JOUR (GITHUB){CYAN}                  ║
 ║ {WHITE}6️⃣    ❌  QUITTER{CYAN}                               ║
 ╚═══════════════════════════════════════════════╝{RESET}
-""")
+""", flush=True)
             choice = input(f"{BOLD}➜ Ton choix : {RESET}")
 
             if choice == "1":
@@ -354,8 +364,8 @@ class TikTokTaskBot:
             elif choice == "2":
                 while True:
                     clear_screen()
-                    print(f"{CYAN}=== ➕ AJOUT DE COMPTE ==={RESET}")
-                    print(f"{DIM}Appuie sur ENTRÉE sans rien écrire pour retourner au menu.{RESET}\n")
+                    print(f"{CYAN}=== ➕ AJOUT DE COMPTE ==={RESET}", flush=True)
+                    print(f"{DIM}Appuie sur ENTRÉE sans rien écrire pour retourner au menu.{RESET}\n", flush=True)
                     
                     name = input(f"Nom du compte n°{len(self.accounts)+1} : ")
                     
@@ -363,23 +373,23 @@ class TikTokTaskBot:
                         break
                     
                     if name in self.accounts:
-                        print(f"{RED}Ce compte existe déjà !{RESET}")
+                        print(f"{RED}Ce compte existe déjà !{RESET}", flush=True)
                         await asyncio.sleep(1)
                     else:
                         self.accounts.append(name)
                         self.save_json("accounts.json", self.accounts)
-                        print(f"{GREEN}✅ Compte '{name}' ajouté avec succès !{RESET}")
+                        print(f"{GREEN}✅ Compte '{name}' ajouté avec succès !{RESET}", flush=True)
                         await asyncio.sleep(0.5)
 
             elif choice == "3":
                 clear_screen()
-                print(f"{CYAN}=== 📋 COMPTES CONFIGURÉS ==={RESET}")
+                print(f"{CYAN}=== 📋 COMPTES CONFIGURÉS ==={RESET}", flush=True)
                 if not self.accounts:
-                    print("Aucun compte.")
+                    print("Aucun compte.", flush=True)
                 for i, acc in enumerate(self.accounts, 1):
-                    print(f"{CYAN}{i}.{RESET} {acc}")
+                    print(f"{CYAN}{i}.{RESET} {acc}", flush=True)
                 
-                print(f"\n{RED}[S]{RESET} Supprimer un compte  |  {WHITE}[Entrée]{RESET} Retour")
+                print(f"\n{RED}[S]{RESET} Supprimer un compte  |  {WHITE}[Entrée]{RESET} Retour", flush=True)
                 sub = input("➜ ").lower()
                 if sub == 's':
                     try:
@@ -387,7 +397,7 @@ class TikTokTaskBot:
                         if 0 <= idx < len(self.accounts):
                             removed = self.accounts.pop(idx)
                             self.save_json("accounts.json", self.accounts)
-                            print(f"{RED}Compte '{removed}' supprimé.{RESET}")
+                            print(f"{RED}Compte '{removed}' supprimé.{RESET}", flush=True)
                             await asyncio.sleep(1)
                     except: pass
 
@@ -396,7 +406,7 @@ class TikTokTaskBot:
             elif choice == "5":
                 self.update_script()
             elif choice == "6":
-                print(f"{CYAN}À bientôt ! 👋{RESET}")
+                print(f"{CYAN}À bientôt ! 👋{RESET}", flush=True)
                 break
 
 if __name__ == "__main__":
@@ -404,4 +414,4 @@ if __name__ == "__main__":
     try:
         asyncio.run(bot.menu())
     except KeyboardInterrupt:
-        print("\nArrêt forcé.")
+        print("\nArrêt forcé.", flush=True)
