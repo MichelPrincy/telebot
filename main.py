@@ -126,7 +126,7 @@ class TikTokTaskBot:
             os.system(f'{self.adb} am start -a android.intent.action.VIEW -d "{link}" > /dev/null 2>&1')
             await asyncio.sleep(4)
             os.system(f"{self.adb} input tap {coord_clone}")
-            await asyncio.sleep(25) # Attente chargement vidéo
+            await asyncio.sleep(20) # Attente chargement vidéo
 
             # 2. Réouverture (Refresh)
             os.system(f'{self.adb} am start -a android.intent.action.VIEW -d "{link}" > /dev/null 2>&1')
@@ -145,7 +145,7 @@ class TikTokTaskBot:
                 if comment_text:
                     # A. METTRE EN PAUSE
                     os.system(f"{self.adb} input tap {PAUSE_VIDEO}")
-                    await asyncio.sleep(1)
+                    await asyncio.sleep(5)
 
                     print(f"{CYAN}   ✍️ Copier/Coller du commentaire...{RESET}", flush=True)
                     
@@ -155,7 +155,7 @@ class TikTokTaskBot:
                     try:
                         # On attend max 2 secondes, sinon on continue pour ne pas bloquer le bot
                         subprocess.run(f'termux-clipboard-set "{safe_comment}"', shell=True, timeout=2)
-                    except subprocess.TimeoutError:
+                    except subprocess.TimeoutExpired:
                         print(f"{RED}   ⚠️ Le presse-papier Termux est lent, on continue...{RESET}", flush=True)
                     except Exception as e:
                         print(f"{RED}   ⚠️ Erreur presse-papier: {e}{RESET}", flush=True)
