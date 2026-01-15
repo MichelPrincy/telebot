@@ -43,7 +43,6 @@ SWIPE_REFRESH = "900 450 900 980 500"
 # --- COORDONNÉES COMMENTAIRE ---
 COMMENT_ICON = "990 1382"
 COMMENT_INPUT_FIELD = "400 2088"
-# Les coordonnées de "Coller" ne sont plus nécessaires avec ADBKeyBoard
 COMMENT_SEND_BUTTON = "980 1130"
 
 # ================== TELEGRAM ==================
@@ -134,7 +133,7 @@ class TikTokTaskBot:
             os.system(f'{self.adb} am start -a android.intent.action.VIEW -d "{link}" > /dev/null 2>&1')
             await asyncio.sleep(4)
             os.system(f"{self.adb} input tap {coord_clone}")
-            await asyncio.sleep(20) # Attente chargement vidéo
+            await asyncio.sleep(23) # Attente chargement vidéo
 
             # 2. Réouverture (Refresh)
             os.system(f'{self.adb} am start -a android.intent.action.VIEW -d "{link}" > /dev/null 2>&1')
@@ -153,7 +152,7 @@ class TikTokTaskBot:
                 if comment_text:
                     # A. METTRE EN PAUSE
                     os.system(f"{self.adb} input tap {PAUSE_VIDEO}")
-                    await asyncio.sleep(4)
+                    await asyncio.sleep(5)
 
                     print(f"{CYAN}   ✍️ Écriture via ADBKeyBoard...{RESET}", flush=True)
                     
@@ -165,12 +164,21 @@ class TikTokTaskBot:
                     os.system(f"{self.adb} input tap {COMMENT_INPUT_FIELD}")
                     await asyncio.sleep(2)
                     
-                    # D. ENVOYER LE TEXTE VIA BROADCAST (ADBKeyBoard)
-                    # Sécurisation des guillemets simples pour ne pas casser la commande shell
-                    safe_comment = comment_text.replace("'", "'\\''")
+                    # D. ENVOYER LE TEXTE VIA SUBPROCESS (CORRECTION DU BUG EMOJI)
+                    # L'utilisation d'une liste [] empêche le shell d'interpréter les emojis comme des commandes
+                    cmd = [
+                        "adb", "-s", self.device_id, "shell", "am", "broadcast",
+                        "-a", "ADB_INPUT_TEXT",
+                        "--es", "msg", comment_text
+                    ]
                     
-                    # Commande Broadcast : envoie le texte directement sans presse-papier
-                    os.system(f"{self.adb} am broadcast -a ADB_INPUT_TEXT --es msg '{safe_comment}'")
+                    try:
+                        subprocess.run(cmd, stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
+                    except Exception as e:
+                        print(f"{RED}Erreur envoi texte: {e}{RESET}")
+                        # Fallback simple
+                        os.system(f'{self.adb} am broadcast -a ADB_INPUT_TEXT --es msg "Wow"')
+
                     await asyncio.sleep(2)
                     
                     # E. ENVOYER LE MESSAGE (Bouton Send de l'appli)
@@ -245,7 +253,7 @@ class TikTokTaskBot:
                 reward_match = re.search(r"Reward\s*:\s*([\d\.]+)", text)
                 self.current_reward = float(reward_match.group(1)) if reward_match else 0.0
                 
-                print(f"\n{DIM}----------------------------------------{RESET}", flush=True)
+                print(f"\n{DIM}---------------task detecting leka--------------{RESET}", flush=True)
                 print(f"{WHITE}🔗 Link: {DIM}{full_link[:30]}...{RESET}", flush=True)
                 print(f"{WHITE}⚡ Action: {BOLD}{action}{RESET}", flush=True)
                 
@@ -336,18 +344,18 @@ class TikTokTaskBot:
 
             print(f"""
 {CYAN}╔═══════════════════════════════════════════════╗
-║             {BOLD}🤖 TIKTOK AUTOMATION BOT V3.1.0{RESET}{CYAN}            ║
+║             {BOLD}🤖 TIKTOK AUTOMATION BOT V3.1.1{RESET}{CYAN}             ║
 ╠═══════════════════════════════════════════════╣
 ║ 📱 État Appareil : {adb_status}{CYAN}                 ║
-║ 👥 Comptes Chargés : {WHITE}{acc_count}{CYAN}                        ║
-║ 💰 Total Gagné : {YELLOW}{total_earned:.2f} CashCoins{CYAN}               ║
+║ 👥 Comptes Chargés : {WHITE}{acc_count}{CYAN}                         ║
+║ 💰 Total Gagné : {YELLOW}{total_earned:.2f} CashCoins{CYAN}                ║
 ╠═══════════════════════════════════════════════╣
-║ {WHITE}1️⃣    ▶️  LANCER LE BOT{CYAN}                          ║
+║ {WHITE}1️⃣    ▶️  LANCER LE BOT{CYAN}                           ║
 ║ {WHITE}2️⃣    ➕  AJOUTER DES COMPTES (Boucle){CYAN}         ║
-║ {WHITE}3️⃣    📋  LISTE DES COMPTES{CYAN}                      ║
+║ {WHITE}3️⃣    📋  LISTE DES COMPTES{CYAN}                       ║
 ║ {WHITE}4️⃣    🔄  REDÉTECTER ADB{CYAN}                          ║
-║ {WHITE}5️⃣    ☁️  MISE À JOUR (GITHUB){CYAN}                   ║
-║ {WHITE}6️⃣    ❌  QUITTER{CYAN}                                ║
+║ {WHITE}5️⃣    ☁️  MISE À JOUR (GITHUB){CYAN}                    ║
+║ {WHITE}6️⃣    ❌  QUITTER{CYAN}                                 ║
 ╚═══════════════════════════════════════════════╝{RESET}
 """, flush=True)
             choice = input(f"{BOLD}➜ Ton choix : {RESET}")
