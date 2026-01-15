@@ -1,4 +1,4 @@
-import os
+iimport os
 import json
 import asyncio
 import re
@@ -217,7 +217,7 @@ class TikTokTaskBot:
             clear_screen()
             print(f"""
 {BLUE}╔════════════════════════════════════╗
-║ 🤖 TIKTOK BOT PRO – CLONE WAXMOON  ║
+║ 🤖 TIKTOK BOT PRO – version 1 par Mich  ║
 ╠════════════════════════════════════╣
 ║ 1️⃣  Lancer le bot                  ║
 ║ 2️⃣  Ajouter un compte               ║
