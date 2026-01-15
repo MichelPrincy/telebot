@@ -23,7 +23,6 @@ RESET = "\033[0m"
 # ================== PACKAGES ==================
 CLONE_CONTAINER_PACKAGE = "com.waxmoon.ma.gp"
 TERMUX_PACKAGE = "com.termux/com.termux.app.TermuxActivity"
-ADB_KEYBOARD_PACKAGE = "com.android.adbkeyboard/.AdbIME"
 
 # ================== COORDONNÉES ==================
 APP_CHOOSER = {
@@ -107,15 +106,10 @@ class TikTokTaskBot:
                 if "\tdevice" in line:
                     self.device_id = line.split("\t")[0]
                     self.adb = f"adb -s {self.device_id} shell"
-                    self.enable_adb_keyboard()
                     return True
             return False
         except: return False
 
-    def enable_adb_keyboard(self):
-        try:
-            os.system(f"{self.adb} ime set {ADB_KEYBOARD_PACKAGE} > /dev/null 2>&1")
-        except: pass
 
     def cleanup_apps(self):
         os.system(f"{self.adb} am force-stop {CLONE_CONTAINER_PACKAGE} > /dev/null 2>&1")
