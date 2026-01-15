@@ -46,7 +46,6 @@ COMMENT_SEND_BUTTON = "980 1130"
 
 # ================== TELEGRAM ==================
 load_dotenv()
-# Vérifie que les variables existent, sinon valeurs par défaut pour éviter le crash immédiat
 try:
     API_ID = int(os.getenv("API_ID"))
     API_HASH = os.getenv("API_HASH")
@@ -141,15 +140,25 @@ class TikTokTaskBot:
 
             if "comment" in action_lower:
                 if comment_text:
-                    self.log(f"   ✍️ Écriture du commentaire...", CYAN)
+                    self.log(f"   ✍️ Copier/Coller du commentaire...", CYAN)
                     os.system(f"{self.adb} input tap {COMMENT_ICON}")
                     await asyncio.sleep(3)
                     os.system(f"{self.adb} input tap {COMMENT_INPUT_FIELD}")
                     await asyncio.sleep(2)
-                    # Remplacement des espaces pour ADB
-                    safe_text = comment_text.replace(" ", "%s")
-                    os.system(f'{self.adb} input text "{safe_text}"')
+                    
+                    # --- MODIFICATION COPIER / COLLER ---
+                    # 1. Nettoyer le texte pour éviter les erreurs de commande shell (guillemets)
+                    safe_comment = comment_text.replace('"', '\\"').replace('`', '\\`').replace('$', '\\$')
+                    
+                    # 2. Copier dans le presse-papier (Utilise l'API Termux)
+                    # Note : Nécessite 'pkg install termux-api' dans Termux
+                    os.system(f'termux-clipboard-set "{safe_comment}"')
+                    await asyncio.sleep(1)
+                    
+                    # 3. Coller (Envoi du code touche PASTE = 279)
+                    os.system(f"{self.adb} input keyevent 279")
                     await asyncio.sleep(2)
+                    
                     os.system(f"{self.adb} input tap {COMMENT_SEND_BUTTON}")
                 else:
                     self.log(f"   ❌ ERREUR: Pas de texte de commentaire reçu.", RED)
@@ -336,7 +345,7 @@ class TikTokTaskBot:
 
             print(f"""
 {CYAN}╔═══════════════════════════════════════════════╗
-║           {BOLD}🤖 TIKTOK AUTOMATION BOT V3{RESET}{CYAN}          ║
+║           {BOLD}🤖 TIKTOK AUTOMATION BOT V3.0.1{RESET}{CYAN}          ║
 ╠═══════════════════════════════════════════════╣
 ║ 📱 État Appareil : {adb_status}{CYAN}                 ║
 ║ 👥 Comptes Chargés : {WHITE}{acc_count}{CYAN}                       ║
