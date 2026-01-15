@@ -236,7 +236,7 @@ class TikTokTaskBot:
                     print(f"{CYAN}🔍 Récupération du commentaire...{RESET}")
                     
                     # On attend que le bot envoie le DEUXIEME message (le texte)
-                    await asyncio.sleep(2) 
+                    await asyncio.sleep(1) 
                     
                     # On récupère le dernier message de l'historique
                     history = await self.client.get_messages(TARGET_BOT, limit=1)
