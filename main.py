@@ -6,6 +6,8 @@ import subprocess
 import requests
 from dotenv import load_dotenv
 from telethon import TelegramClient, events
+# IMPORT IMPORTANT POUR LIRE LES VRAIS LIENS CACHÉS
+from telethon.tl.types import MessageEntityTextUrl
 
 # ================== COULEURS ==================
 RED = "\033[91m"
@@ -69,22 +71,6 @@ class TikTokTaskBot:
         with open(file, "w") as f:
             json.dump(data, f, indent=4)
 
-    # ---------- MISE À JOUR (GITHUB) ----------
-    def update_script(self):
-        self.log("🌐 Téléchargement de la mise à jour...", CYAN)
-        url = "https://raw.githubusercontent.com/MichelPrincy/telebot/main/main.py"
-        try:
-            response = requests.get(url)
-            if response.status_code == 200:
-                with open("main.py", "w") as f:
-                    f.write(response.text)
-                self.log("✅ Mise à jour réussie ! Relance le script.", GREEN)
-                exit()
-            else:
-                self.log(f"❌ Erreur lors du téléchargement : {response.status_code}", RED)
-        except Exception as e:
-            self.log(f"❌ Erreur : {e}", RED)
-
     # ---------- ADB & GESTION APPS ----------
     def detect_device(self):
         try:
@@ -104,25 +90,29 @@ class TikTokTaskBot:
     def focus_termux(self):
         os.system(f"{self.adb} am start --activity-brought-to-front {TERMUX_PACKAGE}")
 
-    # ---------- ACTIONS TIKTOK (DOUBLE TENTATIVE) ----------
+    # ---------- ACTIONS TIKTOK (OPTIMISÉ) ----------
     async def do_task(self, account_idx, link, action):
         try:
             self.cleanup_apps()
-            # Récupération coordonnée (défaut sur le 1er si index inconnu)
             coord_clone = APP_CHOOSER.get(account_idx, "150 1800")
+            
+            # Affichage du lien utilisé pour vérifier
+            self.log(f"🔗 Lien détecté : {link}", CYAN)
 
             # --- PREMIÈRE TENTATIVE (OUVERTURE UNIQUEMENT) ---
             self.log(f"1ère tentative : Ouverture pour préparation...", CYAN)
-            os.system(f'{self.adb} am start -a android.intent.action.VIEW -d "{link}"')
+            # On nettoie le lien des caractères spéciaux pour ADB
+            clean_link = link.replace("&", r"\&")
+            os.system(f'adb -s {self.device_id} shell am start -a android.intent.action.VIEW -d "{clean_link}"')
             await asyncio.sleep(4)
             os.system(f"{self.adb} input tap {coord_clone}")
             
             self.log("⏳ Attente de 30s (pré-chargement)...", YELLOW)
-            await asyncio.sleep(30) # On attend, l'app reste ouverte
+            await asyncio.sleep(30) 
 
             # --- DEUXIÈME TENTATIVE (OUVERTURE + ACTION) ---
             self.log(f"2ème tentative : Ouverture finale et action...", CYAN)
-            os.system(f'{self.adb} am start -a android.intent.action.VIEW -d "{link}"')
+            os.system(f'adb -s {self.device_id} shell am start -a android.intent.action.VIEW -d "{clean_link}"')
             await asyncio.sleep(4)
             os.system(f"{self.adb} input tap {coord_clone}")
             
@@ -168,12 +158,30 @@ class TikTokTaskBot:
         text = event.message.message or ""
         buttons = event.message.buttons
 
-        if "Link :" in text and "Action :" in text:
-            link = re.search(r"Link\s*:\s*(https?://\S+)", text).group(1)
+        # --- DÉTECTION INTELLIGENTE DU LIEN ---
+        # On ne se fie pas seulement au texte visible, on cherche les métadonnées (Entities)
+        extracted_link = None
+        
+        # 1. Recherche dans les liens masqués (Hyperliens)
+        if event.message.entities:
+            for entity in event.message.entities:
+                if isinstance(entity, MessageEntityTextUrl):
+                    if "tiktok.com" in entity.url:
+                        extracted_link = entity.url
+                        break
+        
+        # 2. Si pas de lien masqué, on utilise le Regex sur le texte visible
+        if not extracted_link and "Link :" in text:
+            match = re.search(r"Link\s*:\s*(https?://\S+)", text)
+            if match:
+                extracted_link = match.group(1)
+
+        # --- TRAITEMENT DU MESSAGE ---
+        if extracted_link and "Action :" in text:
             action = re.search(r"Action\s*:\s*(.+)", text).group(1)
-            self.log(f"task trouver, lien: {link}   type: {action}", GREEN)
+            self.log(f"✅ Task trouvée (Lien complet récupéré)", GREEN)
             
-            if await self.do_task(self.index + 1, link, action):
+            if await self.do_task(self.index + 1, extracted_link, action):
                 if buttons:
                     for i, row in enumerate(buttons):
                         for j, btn in enumerate(row):
@@ -214,7 +222,7 @@ class TikTokTaskBot:
 ║ 1️⃣  Lancer le bot                  ║
 ║ 2️⃣  Ajouter un compte               ║
 ║ 3️⃣  Voir / Supprimer comptes        ║
-║ 4️⃣  Redétecter ADB                 ║
+║ 4️⃣  Redétecter ADB                  ║
 ║ 5️⃣  MIS À JOUR (GITHUB)             ║
 ║ 6️⃣  Quitter                         ║
 ╚════════════════════════════════════╝
