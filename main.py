@@ -7,7 +7,6 @@ import requests
 from dotenv import load_dotenv
 from telethon import TelegramClient, events
 from telethon.tl.types import MessageEntityTextUrl
-from telethon.tl.custom import conversation
 
 # ================== COULEURS & STYLES ==================
 RED = "\033[91m"
@@ -47,8 +46,14 @@ COMMENT_SEND_BUTTON = "980 1130"
 
 # ================== TELEGRAM ==================
 load_dotenv()
-API_ID = int(os.getenv("API_ID"))
-API_HASH = os.getenv("API_HASH")
+# Vérifie que les variables existent, sinon valeurs par défaut pour éviter le crash immédiat
+try:
+    API_ID = int(os.getenv("API_ID"))
+    API_HASH = os.getenv("API_HASH")
+except:
+    print(f"{RED}Erreur: API_ID ou API_HASH manquant dans le fichier .env{RESET}")
+    exit()
+
 TARGET_BOT = "@SmmKingdomTasksBot"
 
 # ================== UTILS ==================
@@ -58,14 +63,12 @@ def clear_screen():
 class TikTokTaskBot:
     def __init__(self):
         self.accounts = self.load_json("accounts.json", [])
-        # On stocke le total earned ici
         self.stats = self.load_json("stats.json", {"earned": 0.0, "tasks": 0})
         self.index = 0
         self.device_id = None
         self.adb = "adb shell"
         self.client = TelegramClient("session_bot", API_ID, API_HASH)
         
-        # Variable pour suivre la récompense annoncée
         self.current_reward = 0.0 
 
     def log(self, msg, color=RESET):
@@ -125,44 +128,52 @@ class TikTokTaskBot:
             os.system(f'{self.adb} am start -a android.intent.action.VIEW -d "{link}" > /dev/null 2>&1')
             await asyncio.sleep(4)
             os.system(f"{self.adb} input tap {coord_clone}")
-            await asyncio.sleep(30)
+            await asyncio.sleep(25) # Attente chargement vidéo
 
-            # 2. Réouverture
+            # 2. Réouverture (Refresh pour éviter les bugs de chargement)
             os.system(f'{self.adb} am start -a android.intent.action.VIEW -d "{link}" > /dev/null 2>&1')
-            await asyncio.sleep(4)
+            await asyncio.sleep(3)
             os.system(f"{self.adb} input tap {coord_clone}")
-            await asyncio.sleep(10)
+            await asyncio.sleep(8)
 
             # ACTION
-            if "comment" in action.lower() and comment_text:
-                # Commentaire
-                os.system(f"{self.adb} input tap {COMMENT_ICON}")
-                await asyncio.sleep(3)
-                os.system(f"{self.adb} input tap {COMMENT_INPUT_FIELD}")
-                await asyncio.sleep(2)
-                safe_text = comment_text.replace(" ", "%s")
-                os.system(f'{self.adb} input text "{safe_text}"')
-                await asyncio.sleep(2)
-                os.system(f"{self.adb} input tap {COMMENT_SEND_BUTTON}")
+            action_lower = action.lower()
+
+            if "comment" in action_lower:
+                if comment_text:
+                    self.log(f"   ✍️ Écriture du commentaire...", CYAN)
+                    os.system(f"{self.adb} input tap {COMMENT_ICON}")
+                    await asyncio.sleep(3)
+                    os.system(f"{self.adb} input tap {COMMENT_INPUT_FIELD}")
+                    await asyncio.sleep(2)
+                    # Remplacement des espaces pour ADB
+                    safe_text = comment_text.replace(" ", "%s")
+                    os.system(f'{self.adb} input text "{safe_text}"')
+                    await asyncio.sleep(2)
+                    os.system(f"{self.adb} input tap {COMMENT_SEND_BUTTON}")
+                else:
+                    self.log(f"   ❌ ERREUR: Pas de texte de commentaire reçu.", RED)
+                    return False
             
-            elif "Follow" in action or "profile" in action:
-                # Follow
+            elif "follow" in action_lower or "profile" in action_lower:
+                self.log(f"   👤 Ajout en ami (Follow)...", CYAN)
                 os.system(f"{self.adb} input swipe {SWIPE_REFRESH}")
-                await asyncio.sleep(5)
+                await asyncio.sleep(4)
                 os.system(f"{self.adb} input tap {FOLLOW_BUTTON}")
             
             else:
-                # Like
+                self.log(f"   ❤️ Like de la vidéo...", CYAN)
                 os.system(f"{self.adb} input tap {PAUSE_VIDEO}")
-                await asyncio.sleep(2)
+                await asyncio.sleep(1)
                 os.system(f"{self.adb} input tap {LIKE_BUTTON}")
 
-            await asyncio.sleep(4)
+            await asyncio.sleep(3)
             os.system(f"{self.adb} am force-stop {CLONE_CONTAINER_PACKAGE}")
             self.focus_termux()
             return True
 
-        except Exception:
+        except Exception as e:
+            print(f"Erreur ADB: {e}")
             return False
 
     # ---------- TELEGRAM ----------
@@ -173,15 +184,16 @@ class TikTokTaskBot:
             return
         
         await self.client.start()
+        # On vide les handlers précédents pour éviter les doublons si redémarrage
+        self.client.remove_event_handler(self.on_message)
         self.client.add_event_handler(self.on_message, events.NewMessage(chats=TARGET_BOT))
         
-        # Premier lancement
         if not self.accounts:
             self.log("⚠️ Aucun compte configuré !", RED)
             return
 
         current_acc = self.accounts[self.index]
-        print(f"\n{BOLD}{WHITE}🔍 Recherche de task sur le compte : {CYAN}{current_acc}{RESET}")
+        print(f"\n{BOLD}{WHITE}🚀 Démarrage sur le compte : {CYAN}{current_acc}{RESET}")
         await self.client.send_message(TARGET_BOT, "TikTok")
         await self.client.run_until_disconnected()
 
@@ -189,7 +201,7 @@ class TikTokTaskBot:
         text = event.message.message or ""
         buttons = event.message.buttons
 
-        # --- 1. DETECTION TASK ---
+        # --- 1. DETECTION DE TÂCHE ---
         if "Link :" in text and "Action :" in text:
             full_link = None
             if event.message.entities:
@@ -204,39 +216,51 @@ class TikTokTaskBot:
             if full_link:
                 action = re.search(r"Action\s*:\s*(.+)", text).group(1)
                 
-                # RECHERCHE AMELIOREE DE LA RECOMPENSE
-                # Cherche un nombre (float) après "Reward :"
+                # Extraction Récompense
                 reward_match = re.search(r"Reward\s*:\s*([\d\.]+)", text)
-                try:
-                    self.current_reward = float(reward_match.group(1)) if reward_match else 0.0
-                except:
-                    self.current_reward = 0.0
+                self.current_reward = float(reward_match.group(1)) if reward_match else 0.0
                 
-                # Gestion Commentaire
-                comment_content = None
-                if "comment" in action.lower():
-                    async with self.client.conversation(TARGET_BOT, timeout=10) as conv:
-                        try:
-                            response = await conv.get_response()
-                            comment_content = response.text
-                        except: pass
-
-                # --- AFFICHAGE CLAIRE ---
-                short_link = full_link[:35] + "..." if len(full_link) > 35 else full_link
-                clean_action = "❤️ LIKE"
-                if "Follow" in action: clean_action = "👤 FOLLOW"
-                if "comment" in action: clean_action = "💬 COMMENTAIRE"
-
-                print(f"{DIM}----------------------------------------{RESET}")
+                # --- AFFICHAGE ETAPE PAR ETAPE ---
+                print(f"\n{DIM}----------------------------------------{RESET}")
                 print(f"{GREEN}🎯 Tâche trouvée !{RESET}")
-                print(f"🔗 Lien : {CYAN}{short_link}{RESET}")
-                print(f"⚡ Type : {clean_action}{RESET}")
+                
+                clean_action = "❤️ LIKE"
+                comment_content = None
+
+                if "Follow" in action: clean_action = "👤 FOLLOW"
+                
+                # GESTION SPÉCIALE COMMENTAIRE
+                if "comment" in action.lower():
+                    clean_action = "💬 COMMENTAIRE"
+                    print(f"⚡ Type : {clean_action}")
+                    print(f"{CYAN}🔍 Récupération du commentaire...{RESET}")
+                    
+                    # On attend que le bot envoie le DEUXIEME message (le texte)
+                    await asyncio.sleep(2) 
+                    
+                    # On récupère le dernier message de l'historique
+                    history = await self.client.get_messages(TARGET_BOT, limit=1)
+                    if history:
+                        last_msg = history[0]
+                        # On vérifie que ce n'est pas le message du lien lui-même
+                        if last_msg.id != event.message.id:
+                            comment_content = last_msg.text
+                            print(f"{WHITE}📝 Commentaire : {BOLD}{comment_content}{RESET}")
+                        else:
+                            print(f"{RED}⚠️ Impossible de récupérer le texte (Message unique ?){RESET}")
+                    else:
+                        print(f"{RED}⚠️ Erreur historique vide.{RESET}")
+
+                else:
+                     print(f"⚡ Type : {clean_action}")
+
                 print(f"💰 Récompense prévue : {YELLOW}{self.current_reward} CC{RESET}")
                 print(f"{YELLOW}⏳ Exécution en cours...{RESET}")
                 
                 success = await self.do_task(self.index + 1, full_link, action, comment_content)
                 
                 if success:
+                    # Cliquer sur Completed
                     if buttons:
                         for i, row in enumerate(buttons):
                             for j, btn in enumerate(row):
@@ -244,59 +268,62 @@ class TikTokTaskBot:
                                     await event.message.click(i, j)
                                     return
 
-        # --- 2. VALIDATION & MATH ---
-        elif "added" in text.lower() or "+" in text:
-            # Essayer de trouver le montant dans le message de validation si possible
-            # Ex: "Success! 1.1 CC added"
-            gain_match = re.search(r"(\d+(\.\d+)?)\s*", text)
+        # --- 2. VALIDATION & COMPTAGE ARGENT ---
+        elif "added" in text.lower() or "credited" in text.lower():
+            # Regex stricte pour capturer le montant (ex: "1.1 CC added" ou "+0.5 CC")
+            gain_match = re.search(r"\+?\s*([\d\.]+)\s*CC", text)
             
-            if gain_match and "+" in text:
-                # Si le message contient explicitement +1.1
+            if gain_match:
                  gain = float(gain_match.group(1))
             elif self.current_reward > 0:
-                # Sinon on utilise ce qu'on a lu dans la tache précédente
                 gain = self.current_reward
             else:
-                gain = 1.1 # Valeur par défaut si tout échoue
+                gain = 0.0
             
-            # Calculs
-            old_balance = self.stats["earned"]
-            new_balance = old_balance + gain
-            
-            # Sauvegarde
-            self.stats["earned"] = new_balance
-            self.stats["tasks"] += 1
-            self.save_json("stats.json", self.stats)
+            if gain > 0:
+                old_balance = self.stats["earned"]
+                new_balance = old_balance + gain
+                
+                self.stats["earned"] = new_balance
+                self.stats["tasks"] += 1
+                self.save_json("stats.json", self.stats)
 
-            # Affichage CLAIREMENT visible
-            print(f"{BOLD}{GREEN}✅ Tâche accomplie !{RESET}")
-            print(f"{BOLD}{MAGENTA}💵 Cashcoin: {old_balance:.2f} + {gain} = {new_balance:.2f} CC{RESET}")
-            print(f"{DIM}----------------------------------------{RESET}\n")
+                # AFFICHAGE DU SOLDE EN BAS DE LA TACHE
+                print(f"{BOLD}{GREEN}✅ Tâche validée !{RESET}")
+                print(f"{BOLD}{MAGENTA}💵 Balance : {old_balance:.2f} + {gain} = {new_balance:.2f} CC{RESET}")
+                print(f"{DIM}----------------------------------------{RESET}")
             
+            # Demander la tâche suivante
             await asyncio.sleep(2)
             current_acc = self.accounts[self.index]
-            print(f"{WHITE}🔍 Recherche suivante sur : {CYAN}{current_acc}{RESET}")
+            print(f"\n{WHITE}👉 Tâche suivante pour : {CYAN}{current_acc}{RESET}")
             await self.client.send_message(TARGET_BOT, "TikTok")
 
         # --- 3. PAS DE TASK ---
         elif "Sorry" in text or "No more" in text:
-            print(f"{RED}🚫 Pas de tâche sur ce compte.{RESET}")
-            print(f"{DIM}   Passage au compte suivant...{RESET}\n")
+            print(f"{RED}🚫 Plus de tâches sur ce compte.{RESET}")
+            print(f"{DIM}   Passage au compte suivant...{RESET}")
             
             self.index = (self.index + 1) % len(self.accounts)
             next_acc = self.accounts[self.index]
             
             await asyncio.sleep(2)
-            print(f"{WHITE}🔍 Recherche sur : {CYAN}{next_acc}{RESET}")
+            print(f"\n{WHITE}🔍 Recherche sur : {CYAN}{next_acc}{RESET}")
             await self.client.send_message(TARGET_BOT, "TikTok")
 
+        # --- 4. GESTION BOUTONS COMPTE (SELECTION) ---
         elif buttons and "Link" not in text:
             target = self.accounts[self.index]
+            clicked = False
             for i, row in enumerate(buttons):
                 for j, btn in enumerate(row):
                     if btn.text == target:
                         await event.message.click(i, j)
+                        clicked = True
                         return
+            # Si on n'a pas trouvé le compte dans les boutons, on passe au suivant
+            if not clicked and "Select account" in text:
+                 print(f"{RED}Compte {target} introuvable dans le menu bot.{RESET}")
 
     # ---------- MENU PRINCIPAL ----------
     async def menu(self):
@@ -309,18 +336,18 @@ class TikTokTaskBot:
 
             print(f"""
 {CYAN}╔═══════════════════════════════════════════════╗
-║          {BOLD}🤖 TIKTOK AUTOMATION BOT V2{RESET}{CYAN}          ║
+║           {BOLD}🤖 TIKTOK AUTOMATION BOT V3{RESET}{CYAN}          ║
 ╠═══════════════════════════════════════════════╣
-║ 📱 État Appareil : {adb_status}{CYAN}                  ║
-║ 👥 Comptes Chargés : {WHITE}{acc_count}{CYAN}                        ║
+║ 📱 État Appareil : {adb_status}{CYAN}                 ║
+║ 👥 Comptes Chargés : {WHITE}{acc_count}{CYAN}                       ║
 ║ 💰 Total Gagné : {YELLOW}{total_earned:.2f} CashCoins{CYAN}            ║
 ╠═══════════════════════════════════════════════╣
-║ {WHITE}1️⃣  ▶️  LANCER LE BOT{CYAN}                        ║
-║ {WHITE}2️⃣  ➕  AJOUTER DES COMPTES (Boucle){CYAN}         ║
-║ {WHITE}3️⃣  📋  LISTE DES COMPTES{CYAN}                    ║
-║ {WHITE}4️⃣  🔄  REDÉTECTER ADB{CYAN}                       ║
-║ {WHITE}5️⃣  ☁️  MISE À JOUR (GITHUB){CYAN}                 ║
-║ {WHITE}6️⃣  ❌  QUITTER{CYAN}                              ║
+║ {WHITE}1️⃣   ▶️  LANCER LE BOT{CYAN}                        ║
+║ {WHITE}2️⃣   ➕  AJOUTER DES COMPTES (Boucle){CYAN}         ║
+║ {WHITE}3️⃣   📋  LISTE DES COMPTES{CYAN}                    ║
+║ {WHITE}4️⃣   🔄  REDÉTECTER ADB{CYAN}                        ║
+║ {WHITE}5️⃣   ☁️  MISE À JOUR (GITHUB){CYAN}                  ║
+║ {WHITE}6️⃣   ❌  QUITTER{CYAN}                              ║
 ╚═══════════════════════════════════════════════╝{RESET}
 """)
             choice = input(f"{BOLD}➜ Ton choix : {RESET}")
