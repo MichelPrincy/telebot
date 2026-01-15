@@ -42,6 +42,9 @@ SWIPE_REFRESH = "900 450 900 980 500"
 # --- COORDONNÉES COMMENTAIRE ---
 COMMENT_ICON = "990 1382"
 COMMENT_INPUT_FIELD = "400 2088"
+# Nouvelles coordonnées spécifiques pour le coller
+INPUT_AREA_LONG_PRESS = "500 960" # Zone pour appui long
+PASTE_BUTTON_UI = "150 795"       # Bouton "Coller" qui apparait
 COMMENT_SEND_BUTTON = "980 1130"
 
 # ================== TELEGRAM ==================
@@ -141,24 +144,31 @@ class TikTokTaskBot:
             if "comment" in action_lower:
                 if comment_text:
                     self.log(f"   ✍️ Copier/Coller du commentaire...", CYAN)
+                    
+                    # 1. Copier le texte dans le presse-papier Termux pour qu'il soit dispo sur Android
+                    safe_comment = comment_text.replace('"', '\\"').replace('`', '\\`').replace('$', '\\$')
+                    os.system(f'termux-clipboard-set "{safe_comment}"')
+                    await asyncio.sleep(1)
+
+                    # 2. Ouvrir les commentaires
                     os.system(f"{self.adb} input tap {COMMENT_ICON}")
                     await asyncio.sleep(3)
+                    
+                    # 3. Cliquer sur le champ input
                     os.system(f"{self.adb} input tap {COMMENT_INPUT_FIELD}")
                     await asyncio.sleep(2)
                     
-                    # --- MODIFICATION COPIER / COLLER ---
-                    # 1. Nettoyer le texte pour éviter les erreurs de commande shell (guillemets)
-                    safe_comment = comment_text.replace('"', '\\"').replace('`', '\\`').replace('$', '\\$')
-                    
-                    # 2. Copier dans le presse-papier (Utilise l'API Termux)
-                    # Note : Nécessite 'pkg install termux-api' dans Termux
-                    os.system(f'termux-clipboard-set "{safe_comment}"')
-                    await asyncio.sleep(1)
-                    
-                    # 3. Coller (Envoi du code touche PASTE = 279)
-                    os.system(f"{self.adb} input keyevent 279")
+                    # --- NOUVELLE SÉQUENCE COLLER ---
+                    # A. Appui long sur 500 960 pendant 1.5s (1500ms)
+                    # Syntaxe swipe x1 y1 x2 y2 duration
+                    os.system(f"{self.adb} input swipe {INPUT_AREA_LONG_PRESS} {INPUT_AREA_LONG_PRESS} 1500")
                     await asyncio.sleep(2)
                     
+                    # B. Clic sur le bouton "Coller" (150 795)
+                    os.system(f"{self.adb} input tap {PASTE_BUTTON_UI}")
+                    await asyncio.sleep(2)
+                    
+                    # C. Envoyer
                     os.system(f"{self.adb} input tap {COMMENT_SEND_BUTTON}")
                 else:
                     self.log(f"   ❌ ERREUR: Pas de texte de commentaire reçu.", RED)
@@ -193,7 +203,6 @@ class TikTokTaskBot:
             return
         
         await self.client.start()
-        # On vide les handlers précédents pour éviter les doublons si redémarrage
         self.client.remove_event_handler(self.on_message)
         self.client.add_event_handler(self.on_message, events.NewMessage(chats=TARGET_BOT))
         
@@ -244,14 +253,11 @@ class TikTokTaskBot:
                     print(f"⚡ Type : {clean_action}")
                     print(f"{CYAN}🔍 Récupération du commentaire...{RESET}")
                     
-                    # On attend que le bot envoie le DEUXIEME message (le texte)
                     await asyncio.sleep(1) 
                     
-                    # On récupère le dernier message de l'historique
                     history = await self.client.get_messages(TARGET_BOT, limit=1)
                     if history:
                         last_msg = history[0]
-                        # On vérifie que ce n'est pas le message du lien lui-même
                         if last_msg.id != event.message.id:
                             comment_content = last_msg.text
                             print(f"{WHITE}📝 Commentaire : {BOLD}{comment_content}{RESET}")
@@ -269,7 +275,6 @@ class TikTokTaskBot:
                 success = await self.do_task(self.index + 1, full_link, action, comment_content)
                 
                 if success:
-                    # Cliquer sur Completed
                     if buttons:
                         for i, row in enumerate(buttons):
                             for j, btn in enumerate(row):
@@ -279,12 +284,13 @@ class TikTokTaskBot:
 
         # --- 2. VALIDATION & COMPTAGE ARGENT ---
         elif "added" in text.lower() or "credited" in text.lower():
-            # Regex stricte pour capturer le montant (ex: "1.1 CC added" ou "+0.5 CC")
+            # Essai de capture du montant dans le message de confirmation
             gain_match = re.search(r"\+?\s*([\d\.]+)\s*CC", text)
             
             if gain_match:
                  gain = float(gain_match.group(1))
             elif self.current_reward > 0:
+                # Si le regex échoue mais qu'on avait une récompense prévue, on l'utilise
                 gain = self.current_reward
             else:
                 gain = 0.0
@@ -297,13 +303,14 @@ class TikTokTaskBot:
                 self.stats["tasks"] += 1
                 self.save_json("stats.json", self.stats)
 
-                # AFFICHAGE DU SOLDE EN BAS DE LA TACHE
                 print(f"{BOLD}{GREEN}✅ Tâche validée !{RESET}")
                 print(f"{BOLD}{MAGENTA}💵 Balance : {old_balance:.2f} + {gain} = {new_balance:.2f} CC{RESET}")
                 print(f"{DIM}----------------------------------------{RESET}")
             
-            # Demander la tâche suivante
-            await asyncio.sleep(2)
+            # --- MODIFICATION : ATTENTE DE 4 SECONDES ---
+            print(f"{DIM}⏳ Attente de 4 secondes avant la suite...{RESET}")
+            await asyncio.sleep(4)
+            
             current_acc = self.accounts[self.index]
             print(f"\n{WHITE}👉 Tâche suivante pour : {CYAN}{current_acc}{RESET}")
             await self.client.send_message(TARGET_BOT, "TikTok")
@@ -330,7 +337,6 @@ class TikTokTaskBot:
                         await event.message.click(i, j)
                         clicked = True
                         return
-            # Si on n'a pas trouvé le compte dans les boutons, on passe au suivant
             if not clicked and "Select account" in text:
                  print(f"{RED}Compte {target} introuvable dans le menu bot.{RESET}")
 
@@ -338,22 +344,21 @@ class TikTokTaskBot:
     async def menu(self):
         while True:
             clear_screen()
-            # Vérification état
             adb_status = f"{GREEN}CONNECTÉ{RESET}" if self.detect_device() else f"{RED}DÉCONNECTÉ{RESET}"
             acc_count = len(self.accounts)
             total_earned = self.stats.get("earned", 0.0)
 
             print(f"""
 {CYAN}╔═══════════════════════════════════════════════╗
-║           {BOLD}🤖 TIKTOK AUTOMATION BOT V3.0.1{RESET}{CYAN}          ║
+║           {BOLD}🤖 TIKTOK AUTOMATION BOT V3.0.2{RESET}{CYAN}          ║
 ╠═══════════════════════════════════════════════╣
 ║ 📱 État Appareil : {adb_status}{CYAN}                 ║
-║ 👥 Comptes Chargés : {WHITE}{acc_count}{CYAN}                       ║
-║ 💰 Total Gagné : {YELLOW}{total_earned:.2f} CashCoins{CYAN}            ║
+║ 👥 Comptes Chargés : {WHITE}{acc_count}{CYAN}                        ║
+║ 💰 Total Gagné : {YELLOW}{total_earned:.2f} CashCoins{CYAN}             ║
 ╠═══════════════════════════════════════════════╣
-║ {WHITE}1️⃣   ▶️  LANCER LE BOT{CYAN}                        ║
+║ {WHITE}1️⃣   ▶️  LANCER LE BOT{CYAN}                         ║
 ║ {WHITE}2️⃣   ➕  AJOUTER DES COMPTES (Boucle){CYAN}         ║
-║ {WHITE}3️⃣   📋  LISTE DES COMPTES{CYAN}                    ║
+║ {WHITE}3️⃣   📋  LISTE DES COMPTES{CYAN}                     ║
 ║ {WHITE}4️⃣   🔄  REDÉTECTER ADB{CYAN}                        ║
 ║ {WHITE}5️⃣   ☁️  MISE À JOUR (GITHUB){CYAN}                  ║
 ║ {WHITE}6️⃣   ❌  QUITTER{CYAN}                              ║
@@ -367,7 +372,6 @@ class TikTokTaskBot:
                 else:
                     input(f"{RED}Ajoute au moins un compte d'abord ! [Entrée]{RESET}")
 
-            # --- MISE A JOUR : BOUCLE D'AJOUT ---
             elif choice == "2":
                 while True:
                     clear_screen()
@@ -376,7 +380,7 @@ class TikTokTaskBot:
                     
                     name = input(f"Nom du compte n°{len(self.accounts)+1} : ")
                     
-                    if not name.strip(): # Si vide, on sort
+                    if not name.strip():
                         break
                     
                     if name in self.accounts:
