@@ -273,7 +273,7 @@ class TikTokTaskBot:
             clear_screen()
             print(f"""
 {BLUE}╔════════════════════════════════════╗
-║ 🤖 TIKTOK BOT PRO – CLONE WAXMOON  ║
+║ 🤖 TIKTOK BOT PRO – by Michel Princy  ║
 ╠════════════════════════════════════╣
 ║ 1️⃣  Lancer le bot                  ║
 ║ 2️⃣  Ajouter un compte               ║
