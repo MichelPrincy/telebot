@@ -23,6 +23,7 @@ RESET = "\033[0m"
 # ================== PACKAGES ==================
 CLONE_CONTAINER_PACKAGE = "com.waxmoon.ma.gp"
 TERMUX_PACKAGE = "com.termux/com.termux.app.TermuxActivity"
+ADB_KEYBOARD_PACKAGE = "com.android.adbkeyboard/.AdbIME"
 
 # ================== COORDONNÉES ==================
 APP_CHOOSER = {
@@ -42,8 +43,7 @@ SWIPE_REFRESH = "900 450 900 980 500"
 # --- COORDONNÉES COMMENTAIRE ---
 COMMENT_ICON = "990 1382"
 COMMENT_INPUT_FIELD = "400 2088"
-INPUT_AREA_LONG_PRESS = "500 960" # Zone pour appui long
-PASTE_BUTTON_UI = "150 795"       # Bouton "Coller" qui apparait
+# Les coordonnées de "Coller" ne sont plus nécessaires avec ADBKeyBoard
 COMMENT_SEND_BUTTON = "980 1130"
 
 # ================== TELEGRAM ==================
@@ -105,9 +105,17 @@ class TikTokTaskBot:
                 if "\tdevice" in line:
                     self.device_id = line.split("\t")[0]
                     self.adb = f"adb -s {self.device_id} shell"
+                    # Initialisation du clavier ADB
+                    self.enable_adb_keyboard()
                     return True
             return False
         except: return False
+
+    def enable_adb_keyboard(self):
+        """Force l'activation du clavier ADBKeyBoard pour éviter les erreurs"""
+        try:
+            os.system(f"{self.adb} ime set {ADB_KEYBOARD_PACKAGE} > /dev/null 2>&1")
+        except: pass
 
     def cleanup_apps(self):
         os.system(f"{self.adb} am force-stop {CLONE_CONTAINER_PACKAGE} > /dev/null 2>&1")
@@ -145,38 +153,27 @@ class TikTokTaskBot:
                 if comment_text:
                     # A. METTRE EN PAUSE
                     os.system(f"{self.adb} input tap {PAUSE_VIDEO}")
-                    await asyncio.sleep(5)
+                    await asyncio.sleep(4)
 
-                    print(f"{CYAN}   ✍️ Copier/Coller du commentaire...{RESET}", flush=True)
+                    print(f"{CYAN}   ✍️ Écriture via ADBKeyBoard...{RESET}", flush=True)
                     
-                    # B. COPIER DANS PRESSE-PAPIER ANDROID (Termux API)
-                    # CORRECTION DU FREEZE ICI : Utilisation de subprocess avec TIMEOUT
-                    safe_comment = comment_text.replace('"', '\\"').replace('`', '\\`').replace('$', '\\$')
-                    try:
-                        # On attend max 2 secondes, sinon on continue pour ne pas bloquer le bot
-                        subprocess.run(f'termux-clipboard-set "{safe_comment}"', shell=True, timeout=2)
-                    except subprocess.TimeoutExpired:
-                        print(f"{RED}   ⚠️ Le presse-papier Termux est lent, on continue...{RESET}", flush=True)
-                    except Exception as e:
-                        print(f"{RED}   ⚠️ Erreur presse-papier: {e}{RESET}", flush=True)
-                    
-                    await asyncio.sleep(1)
-
-                    # C. OUVRIR COMMENTAIRES
+                    # B. OUVRIR COMMENTAIRES
                     os.system(f"{self.adb} input tap {COMMENT_ICON}")
-                    await asyncio.sleep(3)
+                    await asyncio.sleep(2)
                     
-                    # D. CLIQUER INPUT
+                    # C. CLIQUER INPUT (Pour donner le focus au clavier ADB)
                     os.system(f"{self.adb} input tap {COMMENT_INPUT_FIELD}")
                     await asyncio.sleep(2)
                     
-                    # E. SEQUENCE COLLER (Appui long -> Coller)
-                    os.system(f"{self.adb} input swipe {INPUT_AREA_LONG_PRESS} {INPUT_AREA_LONG_PRESS} 1500")
-                    await asyncio.sleep(1.5)
-                    os.system(f"{self.adb} input tap {PASTE_BUTTON_UI}")
-                    await asyncio.sleep(1)
+                    # D. ENVOYER LE TEXTE VIA BROADCAST (ADBKeyBoard)
+                    # Sécurisation des guillemets simples pour ne pas casser la commande shell
+                    safe_comment = comment_text.replace("'", "'\\''")
                     
-                    # F. ENVOYER
+                    # Commande Broadcast : envoie le texte directement sans presse-papier
+                    os.system(f"{self.adb} am broadcast -a ADB_INPUT_TEXT --es msg '{safe_comment}'")
+                    await asyncio.sleep(2)
+                    
+                    # E. ENVOYER LE MESSAGE (Bouton Send de l'appli)
                     os.system(f"{self.adb} input tap {COMMENT_SEND_BUTTON}")
                 else:
                     print(f"{RED}   ❌ ERREUR: Pas de texte de commentaire reçu.{RESET}", flush=True)
@@ -339,18 +336,18 @@ class TikTokTaskBot:
 
             print(f"""
 {CYAN}╔═══════════════════════════════════════════════╗
-║            {BOLD}🤖 TIKTOK AUTOMATION BOT V3.0.5{RESET}{CYAN}           ║
+║             {BOLD}🤖 TIKTOK AUTOMATION BOT V3.1.0{RESET}{CYAN}            ║
 ╠═══════════════════════════════════════════════╣
 ║ 📱 État Appareil : {adb_status}{CYAN}                 ║
-║ 👥 Comptes Chargés : {WHITE}{acc_count}{CYAN}                         ║
-║ 💰 Total Gagné : {YELLOW}{total_earned:.2f} CashCoins{CYAN}              ║
+║ 👥 Comptes Chargés : {WHITE}{acc_count}{CYAN}                        ║
+║ 💰 Total Gagné : {YELLOW}{total_earned:.2f} CashCoins{CYAN}               ║
 ╠═══════════════════════════════════════════════╣
 ║ {WHITE}1️⃣    ▶️  LANCER LE BOT{CYAN}                          ║
 ║ {WHITE}2️⃣    ➕  AJOUTER DES COMPTES (Boucle){CYAN}         ║
 ║ {WHITE}3️⃣    📋  LISTE DES COMPTES{CYAN}                      ║
-║ {WHITE}4️⃣    🔄  REDÉTECTER ADB{CYAN}                         ║
-║ {WHITE}5️⃣    ☁️  MISE À JOUR (GITHUB){CYAN}                  ║
-║ {WHITE}6️⃣    ❌  QUITTER{CYAN}                               ║
+║ {WHITE}4️⃣    🔄  REDÉTECTER ADB{CYAN}                          ║
+║ {WHITE}5️⃣    ☁️  MISE À JOUR (GITHUB){CYAN}                   ║
+║ {WHITE}6️⃣    ❌  QUITTER{CYAN}                                ║
 ╚═══════════════════════════════════════════════╝{RESET}
 """, flush=True)
             choice = input(f"{BOLD}➜ Ton choix : {RESET}")
