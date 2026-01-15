@@ -32,6 +32,7 @@ APP_CHOOSER = {
     6: "150 2015",
 }
 
+PAUSE_VIDEO = "530 1030" # Coordonnée pour mettre en pause
 LIKE_BUTTON = "990 1200"
 FOLLOW_BUTTON = "350 840"
 SWIPE_REFRESH = "900 450 900 980 500"
@@ -126,7 +127,7 @@ class TikTokTaskBot:
             await asyncio.sleep(4)
             os.system(f"{self.adb} input tap {coord_clone}")
             
-            await asyncio.sleep(40)
+            await asyncio.sleep(20)
 
             if "Follow" in action or "profile" in action:
                 self.log("🔄 Refresh profil et Follow...", BLUE)
@@ -134,6 +135,11 @@ class TikTokTaskBot:
                 await asyncio.sleep(5)
                 os.system(f"{self.adb} input tap {FOLLOW_BUTTON}")
             else:
+                # ACTION LIKE AVEC PAUSE
+                self.log("⏸️ Mise en pause de la vidéo...", YELLOW)
+                os.system(f"{self.adb} input tap {PAUSE_VIDEO}")
+                await asyncio.sleep(5) # Attendre que la pause soit effective
+                
                 self.log("❤️ Like en cours...", BLUE)
                 os.system(f"{self.adb} input tap {LIKE_BUTTON}")
 
@@ -164,7 +170,6 @@ class TikTokTaskBot:
         buttons = event.message.buttons
 
         if "Link :" in text and "Action :" in text:
-            # Récupération du lien réel caché
             full_link = None
             if event.message.entities:
                 for entity in event.message.entities:
