@@ -9,7 +9,7 @@ from telethon import TelegramClient, events
 from telethon.tl.types import MessageEntityTextUrl
 from telethon.tl.custom import conversation
 
-# ================== COULEURS ==================
+# ================== COULEURS & STYLES ==================
 RED = "\033[91m"
 GREEN = "\033[92m"
 YELLOW = "\033[93m"
@@ -17,6 +17,8 @@ BLUE = "\033[94m"
 CYAN = "\033[96m"
 MAGENTA = "\033[95m"
 WHITE = "\033[97m"
+BOLD = "\033[1m"
+DIM = "\033[2m"
 RESET = "\033[0m"
 
 # ================== PACKAGES ==================
@@ -64,7 +66,7 @@ class TikTokTaskBot:
         self.client = TelegramClient("session_bot", API_ID, API_HASH)
         
         # Variable pour suivre la récompense annoncée
-        self.current_reward = "0" 
+        self.current_reward = 0.0 
 
     def log(self, msg, color=RESET):
         print(f"{color}{msg}{RESET}")
@@ -119,9 +121,6 @@ class TikTokTaskBot:
             self.cleanup_apps()
             coord_clone = APP_CHOOSER.get(account_idx, "150 1800")
             
-            # Affichage discret de l'action technique
-            # print(f"{CYAN}   -> Ouverture TikTok...{RESET}")
-
             # 1. Ouverture & Attente
             os.system(f'{self.adb} am start -a android.intent.action.VIEW -d "{link}" > /dev/null 2>&1')
             await asyncio.sleep(4)
@@ -169,15 +168,20 @@ class TikTokTaskBot:
     # ---------- TELEGRAM ----------
     async def start_telegram(self):
         if not self.detect_device():
-            self.log("❌ ADB non détecté", RED)
+            self.log("❌ ADB non détecté. Vérifie ta connexion USB/Wifi.", RED)
+            input("Appuie sur Entrée pour revenir au menu...")
             return
         
         await self.client.start()
         self.client.add_event_handler(self.on_message, events.NewMessage(chats=TARGET_BOT))
         
         # Premier lancement
+        if not self.accounts:
+            self.log("⚠️ Aucun compte configuré !", RED)
+            return
+
         current_acc = self.accounts[self.index]
-        print(f"\n{WHITE}recherche de task sur le compte numero {self.index + 1}: {current_acc}{RESET}")
+        print(f"\n{BOLD}{WHITE}🔍 Recherche de task sur le compte : {CYAN}{current_acc}{RESET}")
         await self.client.send_message(TARGET_BOT, "TikTok")
         await self.client.run_until_disconnected()
 
@@ -187,7 +191,6 @@ class TikTokTaskBot:
 
         # --- 1. DETECTION TASK ---
         if "Link :" in text and "Action :" in text:
-            # Extraction du lien
             full_link = None
             if event.message.entities:
                 for entity in event.message.entities:
@@ -199,12 +202,15 @@ class TikTokTaskBot:
                 if match: full_link = match.group(1)
 
             if full_link:
-                # Extraction infos
                 action = re.search(r"Action\s*:\s*(.+)", text).group(1)
                 
-                # Extraction Récompense (pour affichage)
-                reward_match = re.search(r"Reward\s*:\s*(\d+(\.\d+)?)", text)
-                self.current_reward = reward_match.group(1) if reward_match else "?"
+                # RECHERCHE AMELIOREE DE LA RECOMPENSE
+                # Cherche un nombre (float) après "Reward :"
+                reward_match = re.search(r"Reward\s*:\s*([\d\.]+)", text)
+                try:
+                    self.current_reward = float(reward_match.group(1)) if reward_match else 0.0
+                except:
+                    self.current_reward = 0.0
                 
                 # Gestion Commentaire
                 comment_content = None
@@ -216,17 +222,18 @@ class TikTokTaskBot:
                         except: pass
 
                 # --- AFFICHAGE CLAIRE ---
-                short_link = full_link[:30] + "..." if len(full_link) > 30 else full_link
-                clean_action = "Like"
-                if "Follow" in action: clean_action = "Follow"
-                if "comment" in action: clean_action = "Commentaire"
+                short_link = full_link[:35] + "..." if len(full_link) > 35 else full_link
+                clean_action = "❤️ LIKE"
+                if "Follow" in action: clean_action = "👤 FOLLOW"
+                if "comment" in action: clean_action = "💬 COMMENTAIRE"
 
-                print(f"{GREEN}Task trouver sur le compte, Lien: {short_link}{RESET}")
-                print(f"{GREEN}Type: {clean_action}{RESET}")
-                print(f"{GREEN}Recompense {self.current_reward} cashcoin{RESET}")
-                print(f"{YELLOW}Accomplissement de task...{RESET}")
+                print(f"{DIM}----------------------------------------{RESET}")
+                print(f"{GREEN}🎯 Tâche trouvée !{RESET}")
+                print(f"🔗 Lien : {CYAN}{short_link}{RESET}")
+                print(f"⚡ Type : {clean_action}{RESET}")
+                print(f"💰 Récompense prévue : {YELLOW}{self.current_reward} CC{RESET}")
+                print(f"{YELLOW}⏳ Exécution en cours...{RESET}")
                 
-                # EXECUTION
                 success = await self.do_task(self.index + 1, full_link, action, comment_content)
                 
                 if success:
@@ -239,8 +246,18 @@ class TikTokTaskBot:
 
         # --- 2. VALIDATION & MATH ---
         elif "added" in text.lower() or "+" in text:
-            gain_str = re.search(r"(\+?\d+(\.\d+)?)", text).group(1) if "+" in text else self.current_reward
-            gain = float(gain_str)
+            # Essayer de trouver le montant dans le message de validation si possible
+            # Ex: "Success! 1.1 CC added"
+            gain_match = re.search(r"(\d+(\.\d+)?)\s*", text)
+            
+            if gain_match and "+" in text:
+                # Si le message contient explicitement +1.1
+                 gain = float(gain_match.group(1))
+            elif self.current_reward > 0:
+                # Sinon on utilise ce qu'on a lu dans la tache précédente
+                gain = self.current_reward
+            else:
+                gain = 1.1 # Valeur par défaut si tout échoue
             
             # Calculs
             old_balance = self.stats["earned"]
@@ -251,29 +268,28 @@ class TikTokTaskBot:
             self.stats["tasks"] += 1
             self.save_json("stats.json", self.stats)
 
-            # Affichage
-            print(f"{CYAN}task acomplis{RESET}")
-            print(f"{MAGENTA}Cashcoin {old_balance:.1f} + {gain} = {new_balance:.1f} cashcoin{RESET}\n")
+            # Affichage CLAIREMENT visible
+            print(f"{BOLD}{GREEN}✅ Tâche accomplie !{RESET}")
+            print(f"{BOLD}{MAGENTA}💵 Cashcoin: {old_balance:.2f} + {gain} = {new_balance:.2f} CC{RESET}")
+            print(f"{DIM}----------------------------------------{RESET}\n")
             
-            # On relance la boucle
             await asyncio.sleep(2)
             current_acc = self.accounts[self.index]
-            print(f"\n{WHITE}recherche de task sur le compte numero {self.index + 1}: {current_acc}{RESET}")
+            print(f"{WHITE}🔍 Recherche suivante sur : {CYAN}{current_acc}{RESET}")
             await self.client.send_message(TARGET_BOT, "TikTok")
 
         # --- 3. PAS DE TASK ---
         elif "Sorry" in text or "No more" in text:
-            print(f"{RED}pas de task sur cette compte, passer au compte suivant{RESET}\n")
+            print(f"{RED}🚫 Pas de tâche sur ce compte.{RESET}")
+            print(f"{DIM}   Passage au compte suivant...{RESET}\n")
             
-            # Changement de compte
             self.index = (self.index + 1) % len(self.accounts)
             next_acc = self.accounts[self.index]
             
             await asyncio.sleep(2)
-            print(f"\n{WHITE}recherche de task sur le compte numero {self.index + 1}: {next_acc}{RESET}")
+            print(f"{WHITE}🔍 Recherche sur : {CYAN}{next_acc}{RESET}")
             await self.client.send_message(TARGET_BOT, "TikTok")
 
-        # Gestion bouttons menu (rare ici mais au cas où)
         elif buttons and "Link" not in text:
             target = self.accounts[self.index]
             for i, row in enumerate(buttons):
@@ -282,43 +298,91 @@ class TikTokTaskBot:
                         await event.message.click(i, j)
                         return
 
-    # ---------- MENU ----------
+    # ---------- MENU PRINCIPAL ----------
     async def menu(self):
         while True:
             clear_screen()
+            # Vérification état
+            adb_status = f"{GREEN}CONNECTÉ{RESET}" if self.detect_device() else f"{RED}DÉCONNECTÉ{RESET}"
+            acc_count = len(self.accounts)
+            total_earned = self.stats.get("earned", 0.0)
+
             print(f"""
-{BLUE}╔════════════════════════════════════╗
-║ 🤖 TIKTOK BOT PRO – by Michel Princy  ║
-╠════════════════════════════════════╣
-║ 1️⃣  Lancer le bot                  ║
-║ 2️⃣  Ajouter un compte               ║
-║ 3️⃣  Voir / Supprimer comptes        ║
-║ 4️⃣  Redétecter ADB                  ║
-║ 5️⃣  MIS À JOUR (GITHUB)             ║
-║ 6️⃣  Quitter                         ║
-╚════════════════════════════════════╝
+{CYAN}╔═══════════════════════════════════════════════╗
+║          {BOLD}🤖 TIKTOK AUTOMATION BOT V2{RESET}{CYAN}          ║
+╠═══════════════════════════════════════════════╣
+║ 📱 État Appareil : {adb_status}{CYAN}                  ║
+║ 👥 Comptes Chargés : {WHITE}{acc_count}{CYAN}                        ║
+║ 💰 Total Gagné : {YELLOW}{total_earned:.2f} CashCoins{CYAN}            ║
+╠═══════════════════════════════════════════════╣
+║ {WHITE}1️⃣  ▶️  LANCER LE BOT{CYAN}                        ║
+║ {WHITE}2️⃣  ➕  AJOUTER DES COMPTES (Boucle){CYAN}         ║
+║ {WHITE}3️⃣  📋  LISTE DES COMPTES{CYAN}                    ║
+║ {WHITE}4️⃣  🔄  REDÉTECTER ADB{CYAN}                       ║
+║ {WHITE}5️⃣  ☁️  MISE À JOUR (GITHUB){CYAN}                 ║
+║ {WHITE}6️⃣  ❌  QUITTER{CYAN}                              ║
+╚═══════════════════════════════════════════════╝{RESET}
 """)
-            choice = input("Choix ➜ ")
+            choice = input(f"{BOLD}➜ Ton choix : {RESET}")
+
             if choice == "1":
-                if self.accounts: await self.start_telegram()
+                if self.accounts: 
+                    await self.start_telegram()
+                else:
+                    input(f"{RED}Ajoute au moins un compte d'abord ! [Entrée]{RESET}")
+
+            # --- MISE A JOUR : BOUCLE D'AJOUT ---
             elif choice == "2":
-                name = input("Nom du compte TikTok : ")
-                if name:
-                    self.accounts.append(name)
-                    self.save_json("accounts.json", self.accounts)
+                while True:
+                    clear_screen()
+                    print(f"{CYAN}=== ➕ AJOUT DE COMPTE ==={RESET}")
+                    print(f"{DIM}Appuie sur ENTRÉE sans rien écrire pour retourner au menu.{RESET}\n")
+                    
+                    name = input(f"Nom du compte n°{len(self.accounts)+1} : ")
+                    
+                    if not name.strip(): # Si vide, on sort
+                        break
+                    
+                    if name in self.accounts:
+                        print(f"{RED}Ce compte existe déjà !{RESET}")
+                        await asyncio.sleep(1)
+                    else:
+                        self.accounts.append(name)
+                        self.save_json("accounts.json", self.accounts)
+                        print(f"{GREEN}✅ Compte '{name}' ajouté avec succès !{RESET}")
+                        await asyncio.sleep(0.5)
+
             elif choice == "3":
                 clear_screen()
-                print("📂 LISTE DES COMPTES :")
+                print(f"{CYAN}=== 📋 COMPTES CONFIGURÉS ==={RESET}")
+                if not self.accounts:
+                    print("Aucun compte.")
                 for i, acc in enumerate(self.accounts, 1):
-                    print(f"{i}. {acc}")
-                input("\n[Any] Retour")
+                    print(f"{CYAN}{i}.{RESET} {acc}")
+                
+                print(f"\n{RED}[S]{RESET} Supprimer un compte  |  {WHITE}[Entrée]{RESET} Retour")
+                sub = input("➜ ").lower()
+                if sub == 's':
+                    try:
+                        idx = int(input("Numéro du compte à supprimer : ")) - 1
+                        if 0 <= idx < len(self.accounts):
+                            removed = self.accounts.pop(idx)
+                            self.save_json("accounts.json", self.accounts)
+                            print(f"{RED}Compte '{removed}' supprimé.{RESET}")
+                            await asyncio.sleep(1)
+                    except: pass
+
             elif choice == "4":
                 self.detect_device()
             elif choice == "5":
                 self.update_script()
             elif choice == "6":
+                print(f"{CYAN}À bientôt ! 👋{RESET}")
                 break
 
 if __name__ == "__main__":
     bot = TikTokTaskBot()
-    asyncio.run(bot.menu())
+    try:
+        asyncio.run(bot.menu())
+    except KeyboardInterrupt:
+        print("\nArrêt forcé.")
