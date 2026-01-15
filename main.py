@@ -73,6 +73,9 @@ class TikTokTaskBot:
         self.last_action_type = "" 
         self.skip_next_balance = False # Pour gérer le non-comptage des commentaires
 
+        self.pending_gain = 0.0  # Gain en attente d'affichage
+
+
     def load_json(self, file, default):
         if os.path.exists(file):
             try:
@@ -190,7 +193,7 @@ class TikTokTaskBot:
         await self.client.send_message(TARGET_BOT, "TikTok")
         await self.client.run_until_disconnected()
 
-   async def on_message(self, event):
+    async def on_message(self, event):
         text = event.message.message or ""
         buttons = event.message.buttons
 
@@ -207,10 +210,9 @@ class TikTokTaskBot:
                 if match: full_link = match.group(1)
 
             if full_link:
-                # Extraction Action & Récompense
-                action_match = re.search(r"Action\s*:\s*(.+)", text)
-                action = action_match.group(1) if action_match else "Unknown"
+                action = re.search(r"Action\s*:\s*(.+)", text).group(1)
                 
+                # Extraction Récompense
                 reward_match = re.search(r"Reward\s*:\s*([\d\.]+)", text)
                 self.current_reward = float(reward_match.group(1)) if reward_match else 0.0
                 
@@ -219,66 +221,86 @@ class TikTokTaskBot:
                 print(f"{WHITE}🔗 Task: {BOLD}{action}{RESET} | {YELLOW}Reward: {self.current_reward} CC{RESET}", flush=True)
                 
                 # ============================================================
-                # 🛑 GESTION COMMENTAIRES (IGNORE ADB)
+                # 🛑 GESTION COMMENTAIRES (IGNORE ADB + PAS DE COMPTAGE)
                 # ============================================================
                 if "comment" in action.lower():
-                    self.skip_next_balance = True
+                    self.skip_next_balance = True # On active le flag pour ne pas compter l'argent
                     print(f"{MAGENTA}💬 Commentaire détecté : {RED}ADB SKIPPED{RESET}", flush=True)
-                    print(f"{DIM}   (Validation auto sans reward immédiat){RESET}", flush=True)
+                    print(f"{DIM}   (Fonctionnalité en dev - Validation auto sans reward){RESET}", flush=True)
                     
+                    # Simulation délai humain rapide
                     await asyncio.sleep(2)
+                    
+                    # Clic immédiat
                     if buttons:
                         for i, row in enumerate(buttons):
                             for j, btn in enumerate(row):
-                                if any(word in btn.text for word in ["Completed", "✅"]):
+                                if "Completed" in btn.text or "✅" in btn.text:
                                     await event.message.click(i, j)
                                     return
-                    return 
+                    return # On sort de la fonction ici
 
                 # ============================================================
                 # ▶️ GESTION NORMALE (LIKE / FOLLOW)
                 # ============================================================
                 else:
-                    self.skip_next_balance = False
+                    self.skip_next_balance = False # On compte l'argent normalement
                     print(f"{YELLOW}⏳ Exécution en cours sur le téléphone...{RESET}", flush=True)
                     
                     success = await self.do_task(self.index + 1, full_link, action, None)
                     
                     if success:
-                        # --- AFFICHAGE SUCCESS ---
+                        # --- AFFICHAGE COMPLET AVANT LE CLICK ---
                         action_name = "👤 FOLLOW" if "FOLLOW" in self.last_action_type else "❤️ LIKE"
                         print(f"{GREEN}✅ {action_name} EFFECTUÉ AVEC SUCCÈS{RESET}", flush=True)
 
-                        # --- COMPTAGE ET MISE À JOUR DU SOLDE ---
-                        gain = self.current_reward
-                        if gain > 0:
-                            old_balance = self.stats["earned"]
-                            new_balance = old_balance + gain
-                            
-                            # Mise à jour des stats
-                            self.stats["earned"] = round(new_balance, 2)
-                            self.stats["tasks"] += 1
-                            self.save_json("stats.json", self.stats)
+                        if self.pending_gain > 0:
+                            old_balance = self.stats["earned"] - self.pending_gain
+                            new_balance = self.stats["earned"]
 
-                            print(f"{MAGENTA}💰 SOLDE: {old_balance:.1f} + {gain} = {BOLD}{self.stats['earned']:.1f} CC{RESET}", flush=True)
+                            print(
+                                f"{MAGENTA}💰 SOLDE: {old_balance:.1f} + "
+                                f"{self.pending_gain:.1f} = {BOLD}{new_balance:.1f} CC{RESET}",
+                                flush=True
+                            )
 
-                        # --- VALIDATION ---
+                            self.pending_gain = 0.0
+
                         print(f"{CYAN}➡️  Envoi de la validation au bot...{RESET}", flush=True)
+                        
                         if buttons:
                             for i, row in enumerate(buttons):
                                 for j, btn in enumerate(row):
-                                    if any(word in btn.text for word in ["Completed", "✅"]):
+                                    if "Completed" in btn.text or "✅" in btn.text:
                                         await event.message.click(i, j)
                                         return
 
-        # --- 2. CONFIRMATION DU BOT ---
-        elif any(word in text.lower() for word in ["added", "credited"]):
+        # --- 2. VALIDATION & LOGS ---
+        elif "added" in text.lower() or "credited" in text.lower():
+            # SI C'ETAIT UN COMMENTAIRE, ON IGNORE LE COMPTAGE
             if self.skip_next_balance:
-                print(f"{DIM}🚫 Gain ignoré (Commentaire terminé).{RESET}", flush=True)
-                self.skip_next_balance = False 
+                print(f"{DIM}🚫 Gain ignoré (Commentaire skipped).{RESET}", flush=True)
+                self.skip_next_balance = False # Reset du flag
+            
             else:
-                # On ne recalcule pas, on confirme juste la réception
-                print(f"{GREEN}⭐ Bot: Points validés avec succès !{RESET}", flush=True)
+                # COMPTAGE NORMAL
+                gain_match = re.search(r"\+?\s*([\d\.]+)\s*CC", text)
+                if gain_match:
+                    gain = float(gain_match.group(1))
+                elif self.current_reward > 0:
+                    gain = self.current_reward
+                else:
+                    gain = 0.0
+                
+                if gain > 0:
+                    old_balance = self.stats["earned"]
+                    new_balance = old_balance + gain
+                    self.stats["earned"] = new_balance
+                    self.stats["tasks"] += 1
+                    self.save_json("stats.json", self.stats)
+
+                    self.pending_gain = gain
+
             
             # --- SUITE RAPIDE ---
             await asyncio.sleep(2)
