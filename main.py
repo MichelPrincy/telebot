@@ -139,7 +139,7 @@ class TikTokTaskBot:
             os.system(f'{self.adb} am start -a android.intent.action.VIEW -d "{link}" > /dev/null 2>&1')
             await asyncio.sleep(5)
             os.system(f"{self.adb} input tap {coord_clone}")
-            await asyncio.sleep(20) # Temps de chargement
+            await asyncio.sleep(30) # Temps de chargement
 
             # 2. Réouverture / Refresh ADB (Classique)
             os.system(f'{self.adb} am start -a android.intent.action.VIEW -d "{link}" > /dev/null 2>&1')
