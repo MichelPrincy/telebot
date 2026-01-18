@@ -178,30 +178,67 @@ class TikTokTaskBot:
 
             # --- CAS LIKE ---
             else:
-                print(f"{CYAN}   ❤️  Mode Like (U2)...{RESET}", flush=True)
+                print(f"{CYAN}   ❤️  Mode Like (Optimisé)...{RESET}", flush=True)
                 
-                # 1. PAUSE (Clic au centre)
+                # 1. PAUSE (Clic au centre pour stabiliser l'écran)
                 self.d.click(0.5, 0.5) 
                 print(f"{DIM}   -> Vidéo mise en pause{RESET}")
-                await asyncio.sleep(1)
+                await asyncio.sleep(0.5)
 
-                # 2. CHERCHER LE COEUR BLANC
-                # Le bouton Like a souvent la description "Like video" (J'aime) quand il n'est pas activé
-                # S'il est déjà liké, la description change souvent (ex: "Undo like")
+                found_like = False
+
+                # A. TENTATIVE PAR IMAGE (La plus précise selon votre demande)
+                # Assurez-vous d'avoir le fichier 'heart_icon.png' dans le dossier du script
+                if os.path.exists("heart_icon.png"):
+                    print(f"{DIM}   🔍 Recherche par image...{RESET}")
+                    # threshold=0.8 signifie qu'il faut que ça ressemble à 80%
+                    if self.d.image.match("heart_icon.png", threshold=0.8):
+                        self.d.image.click("heart_icon.png", timeout=2.0)
+                        print(f"{GREEN}   -> Clic sur l'image du Cœur !{RESET}")
+                        found_like = True
                 
-                # Essai par Description (Le plus fiable pour les icônes sans texte)
-                if self.d(descriptionContains="Like").exists:
-                    self.d(descriptionContains="Like").click()
-                    print(f"{GREEN}   -> Clic sur l'icône Like (Desc){RESET}")
-                
-                # Essai par Resource ID (Plus risqué car change souvent)
-                elif self.d(resourceId="com.zhiliaoapp.musically:id/b_o").exists: # ID exemple
-                    self.d(resourceId="com.zhiliaoapp.musically:id/b_o").click()
-                
-                # Essai générique U2 si l'image est détectée (avancé) ou fallback ADB
-                else:
-                    print(f"{YELLOW}   ⚠️ Cœur U2 non détecté, tentative ADB...{RESET}")
-                    os.system(f"{self.adb} input tap 990 1200") # Ta coordonnée originale en secours
+                # B. TENTATIVE PAR DESCRIPTION (Français & Anglais)
+                if not found_like:
+                    # On cherche "Like", "Aimer", "J'aime" (insensible à la casse)
+                    # TikTok change souvent : "Aimer la vidéo", "J'aime", "Like video"
+                    like_btn = None
+                    
+                    if self.d(descriptionContains="Like").exists:
+                        like_btn = self.d(descriptionContains="Like")
+                    elif self.d(descriptionContains="Aimer").exists:
+                        like_btn = self.d(descriptionContains="Aimer")
+                    elif self.d(descriptionContains="J'aime").exists:
+                        like_btn = self.d(descriptionContains="J'aime")
+                    # Parfois le texte est "double tap to like"
+                    elif self.d(descriptionContains="taper").exists:
+                         like_btn = self.d(descriptionContains="taper")
+
+                    if like_btn:
+                        like_btn.click()
+                        print(f"{GREEN}   -> Clic sur le texte (Like/Aimer){RESET}")
+                        found_like = True
+
+                # C. TENTATIVE PAR RESOURCE ID (Dernier recours U2)
+                if not found_like:
+                    # IDs connus des versions récentes de TikTok
+                    ids = [
+                        "com.zhiliaoapp.musically:id/b_o", # Ancien
+                        "com.zhiliaoapp.musically:id/gud", # Récent
+                        "com.zhiliaoapp.musically:id/dcp"  # Autre variante
+                    ]
+                    for rid in ids:
+                        if self.d(resourceId=rid).exists:
+                            self.d(resourceId=rid).click()
+                            print(f"{GREEN}   -> Clic sur ID {rid}{RESET}")
+                            found_like = True
+                            break
+
+                # D. FALLBACK ADB (Si tout échoue)
+                if not found_like:
+                    print(f"{YELLOW}   ⚠️ Cœur introuvable (U2), tentative ADB Force...{RESET}")
+                    # Coordonnée approximative du cœur sur la plupart des écrans (90% width, 55% height)
+                    # Ajustez selon votre écran si besoin (ex: 990 1200)
+                    os.system(f"{self.adb} input tap 990 1200")
 
             await asyncio.sleep(3)
             os.system(f"{self.adb} am force-stop {CLONE_CONTAINER_PACKAGE}")
