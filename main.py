@@ -1,10 +1,8 @@
-import os
-import json
-import asyncio
 import re
 import subprocess
 import time
 import requests
+import uiautomator2 as u2  # <--- NOUVEL IMPORT
 from dotenv import load_dotenv
 from telethon import TelegramClient, events
 from telethon.tl.types import MessageEntityTextUrl
@@ -25,35 +23,25 @@ RESET = "\033[0m"
 CLONE_CONTAINER_PACKAGE = "com.waxmoon.ma.gp"
 TERMUX_PACKAGE = "com.termux/com.termux.app.TermuxActivity"
 
-# ================== VALEURS DES GAINS (FIXE) ==================
+# ================== VALEURS DES GAINS ==================
 GAIN_LIKE = 1.1
 GAIN_FOLLOW = 3.0
 
-# ================== COORDONNÉES ==================
+# ================== COORDONNÉES (ADB FALLBACK) ==================
 APP_CHOOSER = {
-    1: "150 1800",
-    2: "350 1800",
-    3: "530 1800",
-    4: "740 1800",
-    5: "930 1800",
-    6: "150 2015",
-    7: "340 2015",
-    8: "530 2015",
+    1: "150 1800", 2: "350 1800", 3: "530 1800", 4: "740 1800",
+    5: "930 1800", 6: "150 2015", 7: "340 2015", 8: "530 2015",
 }
-
-PAUSE_VIDEO = "530 1030"
-LIKE_BUTTON = "990 1200"
-FOLLOW_BUTTON = "350 840"
+# On garde les coordonnées pour le refresh manuel si besoin
 SWIPE_REFRESH = "900 450 900 980 500"
 
 # ================== TELEGRAM ==================
-
 load_dotenv()
 try:
     API_ID = int(os.getenv("API_ID"))
     API_HASH = os.getenv("API_HASH")
 except:
-    print(f"{RED}Erreur: API_ID ou API_HASH manquant dans le fichier .env{RESET}", flush=True)
+    print(f"{RED}Erreur: API_ID ou API_HASH manquant dans le fichier .env{RESET}")
     exit()
 
 TARGET_BOT = "@SmmKingdomTasksBot"
@@ -72,7 +60,7 @@ class TikTokTaskBot:
         self.device_id = None
         self.adb = "adb shell"
         self.client = TelegramClient("session_bot", API_ID, API_HASH)
-        self.last_action_type = "" 
+        self.d = None # Instance uiautomator2
 
     def load_json(self, file, default):
         if os.path.exists(file):
@@ -87,43 +75,39 @@ class TikTokTaskBot:
             json.dump(data, f, indent=4)
 
     def get_next_active_index(self):
-        """Cherche le prochain index qui n'est pas en pause"""
         start_index = self.index
-        # On boucle pour trouver un compte non-pausé
         for _ in range(len(self.accounts)):
             self.index = (self.index + 1) % len(self.accounts)
             current_name = self.accounts[self.index]
-            
-            # Si le compte n'est PAS dans la liste des pauses, c'est bon
             if current_name not in self.paused_accounts:
                 return self.index
-        
-        # Si on arrive ici, c'est que TOUS les comptes sont en pause
         print(f"{RED}⚠️ ATTENTION : Tous les comptes sont en pause !{RESET}")
-        return start_index # On reste sur le même par défaut pour éviter un crash
+        return start_index 
 
-    # ---------- MISE À JOUR ----------
-    def update_script(self):
-        print(f"{CYAN}🌐 Vérification mise à jour...{RESET}", flush=True)
-        url = "https://raw.githubusercontent.com/MichelPrincy/telebot/main/main.py"
-        try:
-            response = requests.get(url)
-            if response.status_code == 200:
-                with open("main.py", "w") as f:
-                    f.write(response.text)
-                print(f"{GREEN}✅ Mise à jour installée.{RESET}", flush=True)
-                exit()
-        except Exception: pass
-
-    # ---------- ADB & GESTION APPS ----------
+    # ---------- ADB & UIAUTOMATOR ----------
     def detect_device(self):
         try:
             out = subprocess.check_output(["adb", "devices"]).decode()
+            found = False
             for line in out.splitlines():
                 if "\tdevice" in line:
                     self.device_id = line.split("\t")[0]
                     self.adb = f"adb -s {self.device_id} shell"
-                    return True
+                    found = True
+                    break
+            
+            if found:
+                # Connexion Uiautomator2
+                try:
+                    print(f"{YELLOW}🔌 Connexion uiautomator2...{RESET}")
+                    self.d = u2.connect(self.device_id)
+                    # Optionnel: Accélère u2
+                    self.d.implicitly_wait(10.0) 
+                    self.d.settings['operation_delay'] = (0.2, 0.2)
+                    print(f"{GREEN}✅ Uiautomator2 Connecté!{RESET}")
+                except Exception as e:
+                    print(f"{RED}Erreur connexion U2: {e}{RESET}")
+                return True
             return False
         except: return False
 
@@ -134,43 +118,79 @@ class TikTokTaskBot:
     def focus_termux(self):
         os.system(f"{self.adb} am start --activity-brought-to-front {TERMUX_PACKAGE} > /dev/null 2>&1")
 
-    # ---------- ACTIONS TIKTOK ----------
+    # ---------- ACTIONS TIKTOK (HYBRIDE ADB + U2) ----------
     async def do_task(self, account_idx, link, action):
         try:
             self.cleanup_apps()
             coord_clone = APP_CHOOSER.get(account_idx, "100 1100")
             
-            # 1. Ouverture & Attente
+            # 1. Ouverture ADB (Classique)
             os.system(f'{self.adb} am start -a android.intent.action.VIEW -d "{link}" > /dev/null 2>&1')
             await asyncio.sleep(5)
             os.system(f"{self.adb} input tap {coord_clone}")
-            await asyncio.sleep(30) # Attente chargement vidéo
+            await asyncio.sleep(20) # Temps de chargement
 
-            # 2. Réouverture (Refresh)
+            # 2. Réouverture / Refresh ADB (Classique)
             os.system(f'{self.adb} am start -a android.intent.action.VIEW -d "{link}" > /dev/null 2>&1')
             await asyncio.sleep(5)
             os.system(f"{self.adb} input tap {coord_clone}")
             
-            # --- STRICT : ATTENTE 10S AVANT INTERACTION ---
             print(f"{YELLOW}⏳ Attente stricte 10s...{RESET}", flush=True)
             await asyncio.sleep(10)
 
-            # ACTION
+            # ================== UIAUTOMATOR2 LOGIC ==================
             action_lower = action.lower()
 
+            # --- CAS FOLLOW ---
             if "follow" in action_lower or "profile" in action_lower:
-                self.last_action_type = "FOLLOW"
-                print(f"{CYAN}   👤 Ajout en ami (Follow)...{RESET}", flush=True)
-                os.system(f"{self.adb} input swipe {SWIPE_REFRESH}")
-                await asyncio.sleep(4)
-                os.system(f"{self.adb} input tap {FOLLOW_BUTTON}")
-            
+                print(f"{CYAN}   👤 Recherche bouton Follow (U2)...{RESET}", flush=True)
+                
+                # Swipe léger pour être sûr d'être actif (optionnel)
+                self.d.swipe(500, 1500, 500, 1000, 0.2)
+                await asyncio.sleep(2)
+
+                # Recherche intelligente du texte
+                # On cherche un bouton qui contient "Follow" ou "Suivre"
+                if self.d(text="Follow").exists:
+                    self.d(text="Follow").click()
+                    print(f"{GREEN}   -> Clic sur 'Follow'{RESET}")
+                elif self.d(text="Suivre").exists:
+                    self.d(text="Suivre").click()
+                    print(f"{GREEN}   -> Clic sur 'Suivre'{RESET}")
+                # Parfois c'est juste un bouton rouge avec du texte
+                elif self.d(textContains="Follow").exists:
+                    self.d(textContains="Follow").click()
+                else:
+                    print(f"{RED}   ❌ Bouton Follow introuvable !{RESET}")
+                    # Fallback ADB si échec U2 (Ta coordonnée originale)
+                    # os.system(f"{self.adb} input tap 350 840") 
+
+            # --- CAS LIKE ---
             else:
-                self.last_action_type = "LIKE"
-                print(f"{CYAN}   ❤️ Like de la vidéo...{RESET}", flush=True)
-                os.system(f"{self.adb} input tap {PAUSE_VIDEO}")
+                print(f"{CYAN}   ❤️  Mode Like (U2)...{RESET}", flush=True)
+                
+                # 1. PAUSE (Clic au centre)
+                self.d.click(0.5, 0.5) 
+                print(f"{DIM}   -> Vidéo mise en pause{RESET}")
                 await asyncio.sleep(1)
-                os.system(f"{self.adb} input tap {LIKE_BUTTON}")
+
+                # 2. CHERCHER LE COEUR BLANC
+                # Le bouton Like a souvent la description "Like video" (J'aime) quand il n'est pas activé
+                # S'il est déjà liké, la description change souvent (ex: "Undo like")
+                
+                # Essai par Description (Le plus fiable pour les icônes sans texte)
+                if self.d(descriptionContains="Like").exists:
+                    self.d(descriptionContains="Like").click()
+                    print(f"{GREEN}   -> Clic sur l'icône Like (Desc){RESET}")
+                
+                # Essai par Resource ID (Plus risqué car change souvent)
+                elif self.d(resourceId="com.zhiliaoapp.musically:id/b_o").exists: # ID exemple
+                    self.d(resourceId="com.zhiliaoapp.musically:id/b_o").click()
+                
+                # Essai générique U2 si l'image est détectée (avancé) ou fallback ADB
+                else:
+                    print(f"{YELLOW}   ⚠️ Cœur U2 non détecté, tentative ADB...{RESET}")
+                    os.system(f"{self.adb} input tap 990 1200") # Ta coordonnée originale en secours
 
             await asyncio.sleep(3)
             os.system(f"{self.adb} am force-stop {CLONE_CONTAINER_PACKAGE}")
@@ -178,7 +198,7 @@ class TikTokTaskBot:
             return True
 
         except Exception as e:
-            print(f"Erreur ADB: {e}", flush=True)
+            print(f"Erreur Task: {e}", flush=True)
             return False
 
     # ---------- TELEGRAM ----------
