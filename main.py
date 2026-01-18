@@ -175,9 +175,9 @@ class TikTokTaskBot:
                 else:
                     print(f"{RED}   ❌ Bouton Follow introuvable !{RESET}")
                     # Fallback ADB si échec U2 (Ta coordonnée originale)
-                    # os.system(f"{self.adb} input tap 240 800") 
+                    # os.system(f"{self.adb} input tap 240 800")
 
-             else:
+        else:
                 print(f"{CYAN}   ❤️  Mode Like (U2)...{RESET}", flush=True)
                 
                 # 1. PAUSE (Clic au centre)
