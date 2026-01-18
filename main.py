@@ -357,6 +357,14 @@ class TikTokTaskBot:
 
             if choice == "1":
                 if self.accounts: 
+                    # --- DEBUT MODIFICATION ---
+                    self.stats["earned"] = 0.0   # Remet les gains à 0
+                    self.stats["tasks"] = 0      # (Optionnel) Remet aussi le compteur de tâches à 0
+                    self.save_json("stats.json", self.stats) # Sauvegarde la remise à zéro
+                    print(f"{GREEN}💰 Compteur remis à 0 pour cette session.{RESET}")
+                    await asyncio.sleep(1)
+                    # --- FIN MODIFICATION ---
+                    
                     await self.start_telegram()
                 else:
                     input(f"{RED}Ajoute au moins un compte d'abord ! [Entrée]{RESET}")
