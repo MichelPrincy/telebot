@@ -35,6 +35,7 @@ APP_CHOOSER = {
     1: "150 1800", 2: "350 1800", 3: "530 1800", 4: "740 1800",
     5: "930 1800", 6: "150 2015", 7: "340 2015", 8: "530 2015",
 }
+FOLLOW_BUTTON = "180 547"
 # On garde les coordonnées pour le refresh manuel si besoin
 SWIPE_REFRESH = "900 450 900 980 500"
 
@@ -80,6 +81,19 @@ class TikTokTaskBot:
                 return self.index
         print(f"{RED}⚠️ ATTENTION : Tous les comptes sont en pause !{RESET}")
         return start_index 
+
+     # ---------- MISE À JOUR ----------
+    def update_script(self):
+        print(f"{CYAN}🌐 Vérification mise à jour...{RESET}", flush=True)
+        url = "https://raw.githubusercontent.com/MichelPrincy/telebot/main/main.py"
+        try:
+            response = requests.get(url)
+            if response.status_code == 200:
+                with open("main.py", "w") as f:
+                    f.write(response.text)
+                print(f"{GREEN}✅ Mise à jour installée.{RESET}", flush=True)
+                exit()
+        except Exception: pass
 
     # ---------- ADB & UIAUTOMATOR ----------
     def detect_device(self):
@@ -160,7 +174,7 @@ class TikTokTaskBot:
                 else:
                     print(f"{RED}   ❌ Bouton Follow introuvable !{RESET}")
                     # Fallback ADB si échec U2 (Ta coordonnée originale)
-                    # os.system(f"{self.adb} input tap 350 840") 
+                    # os.system(f"{self.adb} input tap 240 800") 
 
             # --- CAS LIKE ---
             else:
