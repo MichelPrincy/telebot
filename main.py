@@ -36,14 +36,8 @@ APP_CHOOSER = {
 SWIPE_REFRESH = "900 450 900 980 500"
 
 # ================== TELEGRAM ==================
-load_dotenv()
-try:
-    API_ID = int(os.getenv("API_ID"))
-    API_HASH = os.getenv("API_HASH")
-except:
-    print(f"{RED}Erreur: API_ID ou API_HASH manquant dans le fichier .env{RESET}")
-    exit()
-
+API_ID = 21426921
+API_HASH = "07a304c39fc55aca132175b1dce4ad55"
 TARGET_BOT = "@SmmKingdomTasksBot"
 
 # ================== UTILS ==================
