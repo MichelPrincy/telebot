@@ -3,6 +3,7 @@ import json
 import asyncio
 import re
 import subprocess
+import time
 import requests
 from dotenv import load_dotenv
 from telethon import TelegramClient, events
@@ -46,6 +47,7 @@ FOLLOW_BUTTON = "350 840"
 SWIPE_REFRESH = "900 450 900 980 500"
 
 # ================== TELEGRAM ==================
+
 load_dotenv()
 try:
     API_ID = int(os.getenv("API_ID"))
@@ -61,8 +63,10 @@ def clear_screen():
     os.system("clear")
 
 class TikTokTaskBot:
+    
     def __init__(self):
         self.accounts = self.load_json("accounts.json", [])
+        self.paused_accounts = self.load_json("paused.json", [])
         self.stats = self.load_json("stats.json", {"earned": 0.0, "tasks": 0})
         self.index = 0
         self.device_id = None
@@ -81,6 +85,22 @@ class TikTokTaskBot:
     def save_json(self, file, data):
         with open(file, "w") as f:
             json.dump(data, f, indent=4)
+
+    def get_next_active_index(self):
+        """Cherche le prochain index qui n'est pas en pause"""
+        start_index = self.index
+        # On boucle pour trouver un compte non-pausé
+        for _ in range(len(self.accounts)):
+            self.index = (self.index + 1) % len(self.accounts)
+            current_name = self.accounts[self.index]
+            
+            # Si le compte n'est PAS dans la liste des pauses, c'est bon
+            if current_name not in self.paused_accounts:
+                return self.index
+        
+        # Si on arrive ici, c'est que TOUS les comptes sont en pause
+        print(f"{RED}⚠️ ATTENTION : Tous les comptes sont en pause !{RESET}")
+        return start_index # On reste sur le même par défaut pour éviter un crash
 
     # ---------- MISE À JOUR ----------
     def update_script(self):
@@ -118,17 +138,17 @@ class TikTokTaskBot:
     async def do_task(self, account_idx, link, action):
         try:
             self.cleanup_apps()
-            coord_clone = APP_CHOOSER.get(account_idx, "150 1800")
+            coord_clone = APP_CHOOSER.get(account_idx, "100 1100")
             
             # 1. Ouverture & Attente
             os.system(f'{self.adb} am start -a android.intent.action.VIEW -d "{link}" > /dev/null 2>&1')
-            await asyncio.sleep(4)
+            await asyncio.sleep(5)
             os.system(f"{self.adb} input tap {coord_clone}")
-            await asyncio.sleep(23) # Attente chargement vidéo
+            await asyncio.sleep(30) # Attente chargement vidéo
 
             # 2. Réouverture (Refresh)
             os.system(f'{self.adb} am start -a android.intent.action.VIEW -d "{link}" > /dev/null 2>&1')
-            await asyncio.sleep(3)
+            await asyncio.sleep(5)
             os.system(f"{self.adb} input tap {coord_clone}")
             
             # --- STRICT : ATTENTE 10S AVANT INTERACTION ---
@@ -169,12 +189,17 @@ class TikTokTaskBot:
             return
         
         await self.client.start()
+        # --- CORRECTION ICI ---
         self.client.remove_event_handler(self.on_message)
         self.client.add_event_handler(self.on_message, events.NewMessage(chats=TARGET_BOT))
+        # ----------------------
         
         if not self.accounts:
             print(f"{RED}⚠️ Aucun compte configuré !{RESET}", flush=True)
             return
+        if self.accounts[self.index] in self.paused_accounts:
+            print(f"{YELLOW}Le compte actuel est en pause, recherche du suivant...{RESET}")
+            self.get_next_active_index()
 
         current_acc = self.accounts[self.index]
         print(f"\n{BOLD}{WHITE}🚀 Démarrage sur le compte : {CYAN}{current_acc}{RESET}", flush=True)
@@ -265,8 +290,17 @@ class TikTokTaskBot:
         # --- 3. PAS DE TASK ---
         elif "Sorry" in text or "No more" in text:
             print(f"{RED}🚫 Pas de task sur ce compte.{RESET}", flush=True)
-            self.index = (self.index + 1) % len(self.accounts)
+            
+            self.get_next_active_index()
+
             next_acc = self.accounts[self.index]
+            
+            # Vérification de sécurité si tout est en pause
+            if next_acc in self.paused_accounts:
+                print(f"{RED}Tous les comptes sont en pause. Arrêt temporaire.{RESET}")
+                await self.client.disconnect()
+                return
+
             await asyncio.sleep(2)
             print(f"\n{WHITE}🔍 Switch vers : {CYAN}{next_acc}{RESET}", flush=True)
             await self.client.send_message(TARGET_BOT, "TikTok")
@@ -283,6 +317,11 @@ class TikTokTaskBot:
                         return
             if not clicked and "Select account" in text:
                  print(f"{RED}Compte {target} introuvable dans le menu bot.{RESET}", flush=True)
+        
+        # --- 5. COMPTE A RÉPARER ---
+        elif "too" in text or "warnings" in text:
+            if text and len(text.strip()) > 0:
+                print(f"{YELLOW}⚠️ Ce compte a besoin d'être réparé : {text}{RESET}", flush=True)
 
     # ---------- MENU PRINCIPAL ----------
     async def menu(self):
@@ -300,11 +339,11 @@ class TikTokTaskBot:
 ██║ ╚═╝ ██║██║╚██████╗██║  ██║
 ╚═╝     ╚═╝╚═╝ ╚═════╝╚═╝  ╚═╝{RESET}
 {DIM}━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━{RESET}
-{WHITE}🤖 BOT AUTOMATION V3.1.2 {DIM}|{RESET} {CYAN}BY MICH{RESET}
+{WHITE}🤖 BOT AUTOMATION V3.1.3 {DIM}|{RESET} {CYAN}BY MICH{RESET}
 {DIM}━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━{RESET}
  📱 Status ADB    : {adb_status}
- 👥 Comptes       : {WHITE}{acc_count}{RESET}
- 💰 Total Gagné   : {YELLOW}{total_earned:.1f} CashCoins{RESET}
+ 👥 Comptes        : {WHITE}{acc_count}{RESET}
+ 💰 Total Gagné    : {YELLOW}{total_earned:.1f} CashCoins{RESET}
 {DIM}━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━{RESET}
  {WHITE}[1]{RESET} ▶️  LANCER LE FARMING
  {WHITE}[2]{RESET} ➕  AJOUTER UN COMPTE
@@ -341,19 +380,45 @@ class TikTokTaskBot:
                         await asyncio.sleep(0.5)
 
             elif choice == "3":
-                clear_screen()
-                print(f"{CYAN}=== 📋 LISTE COMPTES ==={RESET}", flush=True)
-                for i, acc in enumerate(self.accounts, 1):
-                    print(f"{CYAN}{i}.{RESET} {acc}", flush=True)
-                
-                print(f"\n{RED}[S]{RESET} Supprimer | {WHITE}[Entrée]{RESET} Retour", flush=True)
-                if input("➜ ").lower() == 's':
-                    try:
-                        idx = int(input("Numéro : ")) - 1
-                        if 0 <= idx < len(self.accounts):
-                            self.accounts.pop(idx)
-                            self.save_json("accounts.json", self.accounts)
-                    except: pass
+                while True: 
+                    clear_screen()
+                    print(f"{CYAN}=== 📋 GESTION DES COMPTES ==={RESET}", flush=True)
+                    
+                    # Affichage avec statut
+                    for i, acc in enumerate(self.accounts, 1):
+                        status = f"{RED}[PAUSE]{RESET}" if acc in self.paused_accounts else f"{GREEN}[ACTIF]{RESET}"
+                        print(f"{CYAN}{i}.{RESET} {acc} {status}", flush=True)
+                    
+                    print(f"\n{YELLOW}[P]{RESET} Pause/Reprendre | {RED}[S]{RESET} Supprimer | {WHITE}[Entrée]{RESET} Retour", flush=True)
+                    cmd = input("➜ ").lower()
+
+                    if cmd == 'p':
+                        try:
+                            idx = int(input("Numéro du compte à modifier : ")) - 1
+                            if 0 <= idx < len(self.accounts):
+                                target = self.accounts[idx]
+                                if target in self.paused_accounts:
+                                    self.paused_accounts.remove(target) # On retire de la pause
+                                else:
+                                    self.paused_accounts.append(target) # On ajoute en pause
+                                
+                                self.save_json("paused.json", self.paused_accounts)
+                        except: pass
+                    
+                    elif cmd == 's':
+                        try:
+                            idx = int(input("Numéro à supprimer : ")) - 1
+                            if 0 <= idx < len(self.accounts):
+                                removed = self.accounts.pop(idx)
+                                # Nettoyage si le compte était en pause
+                                if removed in self.paused_accounts:
+                                    self.paused_accounts.remove(removed)
+                                    self.save_json("paused.json", self.paused_accounts)
+                                self.save_json("accounts.json", self.accounts)
+                        except: pass
+                    
+                    else:
+                        break # Sortir du menu gestion
 
             elif choice == "4":
                 self.detect_device()
