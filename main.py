@@ -143,7 +143,7 @@ class TikTokTaskBot:
                 print(f"{CYAN}   👤 Recherche bouton Follow (U2)...{RESET}", flush=True)
                 
                 # Swipe léger pour être sûr d'être actif (optionnel)
-                self.d.swipe(500, 1500, 500, 1000, 0.2)
+                os.system(f"{self.adb} input swipe {SWIPE_REFRESH}")
                 await asyncio.sleep(2)
 
                 # Recherche intelligente du texte
