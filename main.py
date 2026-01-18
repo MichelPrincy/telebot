@@ -4,7 +4,7 @@ import asyncio
 import re
 import subprocess
 import time
-import cv2
+
 import requests
 import uiautomator2 as u2  # <--- NOUVEL IMPORT
 from dotenv import load_dotenv
