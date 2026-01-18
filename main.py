@@ -152,7 +152,6 @@ class TikTokTaskBot:
 
             # ================== UIAUTOMATOR2 LOGIC ==================
             action_lower = action.lower()
-
             # --- CAS FOLLOW ---
             if "follow" in action_lower or "profile" in action_lower:
                 print(f"{CYAN}   👤 Recherche bouton Follow (U2)...{RESET}", flush=True)
@@ -176,7 +175,6 @@ class TikTokTaskBot:
                     print(f"{RED}   ❌ Bouton Follow introuvable !{RESET}")
                     # Fallback ADB si échec U2 (Ta coordonnée originale)
                     # os.system(f"{self.adb} input tap 240 800")
-
             else:
                 print(f"{CYAN}   ❤️  Mode Like (U2)...{RESET}", flush=True)
                 
