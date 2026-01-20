@@ -34,6 +34,7 @@ GAIN_FOLLOW = 3.0
 APP_CHOOSER = {
     1: "150 1800", 2: "350 1800", 3: "530 1800", 4: "740 1800",
     5: "930 1800", 6: "150 2015", 7: "340 2015", 8: "530 2015",
+    9: "740 2015", 10: "930 2015",
 }
 FOLLOW_BUTTON = "180 547"
 # On garde les coordonnées pour le refresh manuel si besoin
@@ -367,7 +368,7 @@ class TikTokTaskBot:
 ██║ ╚═╝ ██║██║╚██████╗██║  ██║
 ╚═╝     ╚═╝╚═╝ ╚═════╝╚═╝  ╚═╝{RESET}
 {DIM}━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━{RESET}
-{WHITE}🤖 BOT AUTOMATION V3.2.2 {DIM}|{RESET} {CYAN}BY MICH{RESET}
+{WHITE}🤖 BOT AUTOMATION V3.2.3 {DIM}|{RESET} {CYAN}BY MICH{RESET}
 {DIM}━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━{RESET}
  📱 Status ADB    : {adb_status}
  👥 Comptes        : {WHITE}{acc_count}{RESET}
