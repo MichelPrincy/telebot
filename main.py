@@ -131,7 +131,7 @@ class TikTokTaskBot:
         os.system(f"{self.adb} am start --activity-brought-to-front {TERMUX_PACKAGE} > /dev/null 2>&1")
 
     # ---------- ACTIONS TIKTOK (HYBRIDE ADB + U2) ----------
-    async def do_task(self, account_idx, link, action):
+    async def do_task(self, account_idx, link, action, specific_text=None):  # <--- AJOUTE CECI
         try:
             self.cleanup_apps()
             coord_clone = APP_CHOOSER.get(account_idx, "100 1100")
@@ -504,7 +504,7 @@ class TikTokTaskBot:
 ██║ ╚═╝ ██║██║╚██████╗██║  ██║
 ╚═╝     ╚═╝╚═╝ ╚═════╝╚═╝  ╚═╝{RESET}
 {DIM}━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━{RESET}
-{WHITE}🤖 BOT AUTOMATION V3.2.5 {DIM}|{RESET} {CYAN}BY MICH{RESET}
+{WHITE}🤖 BOT AUTOMATION V3.2.6 {DIM}|{RESET} {CYAN}BY MICH{RESET}
 {DIM}━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━{RESET}
  📱 Status ADB    : {adb_status}
  👥 Comptes        : {WHITE}{acc_count}{RESET}
