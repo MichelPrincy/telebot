@@ -150,24 +150,90 @@ class TikTokTaskBot:
             print(f"{YELLOW}⏳ Attente stricte 10s...{RESET}", flush=True)
             await asyncio.sleep(10)
 
-            # ================== UIAUTOMATOR2 LOGIC (ROBUST) ==================
+            # ================== UIAUTOMATOR2 LOGIC (ROBUST & COMPLETE) ==================
 
-            # Liste des mots clés pour "Suivre" (extensible)
+            # Liste des mots clés pour "Suivre"
             FOLLOW_KEYWORDS = ["Follow", "Suivre", "S'abonner", "Seguir"]
-            # Regex pour trouver "Like", "J'aime", "Love" dans la description (insensible à la casse)
+            # Regex pour "Like"
             LIKE_DESC_REGEX = "(?i)(like|j'aime|love|gostar|aimer)"
-            
+            # Regex pour "Commentaire"
+            COMMENT_DESC_REGEX = "(?i)(comment|commentaire|comentar|reply)"
+
             action_lower = action.lower()
             
-            # --- CAS FOLLOW ---
-            if "follow" in action_lower or "profile" in action_lower:
-                print(f"{CYAN}   👤 Recherche bouton Follow (Smart)...{RESET}", flush=True)
+            # ---------------------------------------------------------
+            # CAS 1 : COMMENTAIRE (Nouveau)
+            # ---------------------------------------------------------
+            if "comment" in action_lower:
+                print(f"{MAGENTA}   💬 Mode Commentaire (Smart)...{RESET}", flush=True)
                 
-                # On construit une requête XPATH ou une boucle pour vérifier les textes
-                # C'est plus rapide de vérifier l'existence via une boucle locale
+                # 1. OUVRIR LES COMMENTAIRES
+                # On cherche l'icône de bulle. Elle est souvent sous le bouton Like.
+                # Méthode A: Par Description (Accessibilité)
+                comments_opened = False
+                if self.d(descriptionMatches=COMMENT_DESC_REGEX).exists:
+                    self.d(descriptionMatches=COMMENT_DESC_REGEX).click()
+                    comments_opened = True
+                    print(f"{DIM}   -> Icône coms cliquée (Desc){RESET}")
+                
+                # Méthode B: Par Géométrie (Si pas de description)
+                # C'est généralement le bouton SOUS le bouton Like (qui est au milieu-droit)
+                elif not comments_opened:
+                    # On reprend la logique structurelle mais on vise plus bas que le Like
+                    try:
+                        buttons = self.d(className="android.widget.ImageView", clickable=True)
+                        screen_w, screen_h = self.d.window_size()
+                        for btn in buttons:
+                            bounds = btn.info['bounds']
+                            cy = (bounds['top'] + bounds['bottom']) / 2
+                            cx = (bounds['left'] + bounds['right']) / 2
+                            # Zone du bouton coms : Droite (>80%) et Bas-Milieu (>55% et <75%)
+                            if (cx > screen_w * 0.80) and (screen_h * 0.55 < cy < screen_h * 0.75):
+                                btn.click()
+                                comments_opened = True
+                                print(f"{DIM}   -> Icône coms cliquée (Geo){RESET}")
+                                break
+                    except: pass
+
+                await asyncio.sleep(2) # Attendre l'animation du tiroir
+
+                # 2. ECRIRE LE COMMENTAIRE
+                if self.d(className="android.widget.EditText").exists:
+                    # Clic pour focus
+                    self.d(className="android.widget.EditText").click()
+                    await asyncio.sleep(1)
+                    
+                    # --- C'EST ICI QUE ÇA CHANGE ---
+                    # Si on a reçu un texte spécifique du bot, on l'utilise.
+                    # Sinon (sécurité), on prend un texte aléatoire "Cool", "Top", etc.
+                    text_to_send = specific_text if specific_text else "Wow super video 🔥"
+                    
+                    print(f"{MAGENTA}   -> Écriture : {text_to_send}{RESET}")
+                    # send_keys est parfait pour écrire des phrases complètes
+                    self.d.send_keys(text_to_send)
+                    await asyncio.sleep(1)
+
+                    # 3. ENVOYER
+                    if self.d(descriptionMatches="(?i)(send|envoyer|publier)").exists:
+                        self.d(descriptionMatches="(?i)(send|envoyer|publier)").click()
+                    else:
+                        self.d.press("enter")
+                    
+                    print(f"{GREEN}   -> Commentaire envoyé !{RESET}")
+                    await asyncio.sleep(2)
+                    # Fermer le tiroir (Clic en haut)
+                    self.d.click(0.5, 0.2)
+
+                else:
+                    print(f"{RED}   ❌ Champ texte introuvable !{RESET}")
+
+            # ---------------------------------------------------------
+            # CAS 2 : FOLLOW
+            # ---------------------------------------------------------
+            elif "follow" in action_lower or "profile" in action_lower:
+                print(f"{CYAN}   👤 Recherche bouton Follow (Smart)...{RESET}", flush=True)
                 clicked = False
                 for keyword in FOLLOW_KEYWORDS:
-                    # On cherche un élément qui contient le texte ET qui est cliquable
                     if self.d(textContains=keyword).exists:
                         self.d(textContains=keyword).click()
                         print(f"{GREEN}   -> Clic sur '{keyword}'{RESET}")
@@ -175,77 +241,52 @@ class TikTokTaskBot:
                         break
                 
                 if not clicked:
-                    # TENTATIVE AVANCÉE : Chercher par Resource ID commun si le texte échoue
-                    # Souvent le bouton follow est un bouton rouge spécifique
-                    # Note: ceci est un exemple, l'ID change selon les versions de l'app
+                    # Fallback ID
                     if self.d(resourceIdMatches=".*follow_btn.*").exists:
                          self.d(resourceIdMatches=".*follow_btn.*").click()
                          print(f"{GREEN}   -> Clic sur Follow (via ID){RESET}")
                     else:
-                        print(f"{RED}   ❌ Bouton Follow introuvable (Textes/ID testés){RESET}")
-                        # Fallback ADB manuel si vraiment nécessaire
-                        # os.system(f"{self.adb} input tap 240 800")
-            
-            # --- CAS LIKE ---
+                        print(f"{RED}   ❌ Bouton Follow introuvable{RESET}")
+
+            # ---------------------------------------------------------
+            # CAS 3 : LIKE
+            # ---------------------------------------------------------
             else:
                 print(f"{CYAN}   ❤️  Mode Like (Smart Logic)...{RESET}", flush=True)
-            
-                # 1. PAUSE (Recommandé pour stabiliser l'UI)
-                # Clic central simple
                 self.d.click(0.5, 0.5) 
                 await asyncio.sleep(0.5)
-            
-                # 2. LOGIQUE DE DÉTECTION DU CŒUR
                 liked_success = False
-            
-                # MÉTHODE A : Par Description (Accessibilité) avec Regex
-                # Cela couvre "Like video", "J'aime la vidéo", "Double tap to like"
+
+                # Méthode A: Description
                 if self.d(descriptionMatches=LIKE_DESC_REGEX).exists:
-                    print(f"{GREEN}   -> Détection via Description (Accessibilité){RESET}")
                     self.d(descriptionMatches=LIKE_DESC_REGEX).click()
                     liked_success = True
-            
-                # MÉTHODE B : Par Position (Hierarchie XML) - TRÈS ROBUSTE
-                # Si la description échoue, on sait que le bouton Like est généralement 
-                # dans un LinearLayout à droite. C'est souvent une ImageView.
-                # On cherche l'élément qui a la même classe que les autres icônes
+                    print(f"{GREEN}   -> Like (Desc){RESET}")
+
+                # Méthode B: Structure (si description échoue)
                 elif not liked_success:
-                    print(f"{YELLOW}   ⚠️ Description absente, analyse de la structure...{RESET}")
-                    
-                    # Sur TikTok, les icônes de droite sont souvent des ImageView clickable
-                    # Le Like est souvent le 2ème ou 3ème élément clickable en partant du haut (Profil > Like > Coms)
-                    # Ceci est un exemple de logique puissante :
                     try:
-                        # On cherche toutes les ImageViews clickables sur la moitié droite de l'écran
                         buttons = self.d(className="android.widget.ImageView", clickable=True)
-                        
+                        screen_w, screen_h = self.d.window_size()
                         for btn in buttons:
-                            info = btn.info
-                            bounds = info['bounds']
-                            center_x = (bounds['left'] + bounds['right']) / 2
-                            center_y = (bounds['top'] + bounds['bottom']) / 2
-                            
-                            # Le bouton Like est à Droite (> 80% largeur) et au Milieu-Haut (~40-50% hauteur)
-                            screen_w, screen_h = self.d.window_size()
-                            
-                            if (center_x > screen_w * 0.80) and (screen_h * 0.35 < center_y < screen_h * 0.55):
-                                print(f"{GREEN}   -> Bouton détecté par coordonnées géométriques !{RESET}")
+                            bounds = btn.info['bounds']
+                            cy = (bounds['top'] + bounds['bottom']) / 2
+                            cx = (bounds['left'] + bounds['right']) / 2
+                            # Zone Like : Droite et Milieu-Haut
+                            if (cx > screen_w * 0.80) and (screen_h * 0.35 < cy < screen_h * 0.55):
                                 btn.click()
                                 liked_success = True
+                                print(f"{GREEN}   -> Like (Geo){RESET}")
                                 break
-                    except Exception as e:
-                        print(f"Erreur logique structurelle: {e}")
-            
-                # MÉTHODE C : L'ARME ABSOLUE (Double Tap)
-                # Si on n'arrive pas à cliquer sur le bouton spécifique, on double-tap la vidéo.
+                    except: pass
+
+                # Méthode C: Double Tap (Ultime recours)
                 if not liked_success:
-                    print(f"{MAGENTA}   🚀 Fallback Ultime : DOUBLE TAP vidéo{RESET}")
-                    # Double clic au centre de l'écran (0.5, 0.5)
+                    print(f"{MAGENTA}   🚀 Fallback : DOUBLE TAP{RESET}")
                     self.d.double_click(0.5, 0.5, duration=0.1) 
                     liked_success = True
-            
+
                 if liked_success:
-                    print(f"{DIM}   -> Like effectué.{RESET}")
                     await asyncio.sleep(1)
 
             await asyncio.sleep(3)
@@ -304,17 +345,52 @@ class TikTokTaskBot:
                 print(f"\n{DIM}━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━{RESET}", flush=True)
                 print(f"{WHITE}🔗 Task: {BOLD}{action}{RESET}", flush=True)
                 
-                # --- CAS COMMENTAIRE (On skip) ---
+                # --- CAS COMMENTAIRE ---
                 if "comment" in action.lower():
-                    print(f"{MAGENTA}💬 Commentaire détecté : {RED}SKIPPED (Pas de gain){RESET}", flush=True)
-                    await asyncio.sleep(2)
-                    if buttons:
-                        for i, row in enumerate(buttons):
-                            for j, btn in enumerate(row):
-                                if "Completed" in btn.text or "✅" in btn.text:
-                                    await event.message.click(i, j)
-                                    return
-                    return
+                    print(f"{MAGENTA}💬 Commentaire détecté : Récupération du texte...{RESET}", flush=True)
+                    
+                    # 1. ASTUCE : On attend que le 2ème message arrive
+                    await asyncio.sleep(0.5) 
+                    
+                    # 2. On récupère le tout dernier message du bot
+                    # (Ce sera le texte à copier)
+                    history = await self.client.get_messages(TARGET_BOT, limit=1)
+                    comment_text = history[0].message if history else None
+
+                    # Petite sécurité : si le dernier message contient encore "Link :", c'est qu'on a raté le texte
+                    if comment_text and "Link :" in comment_text:
+                        comment_text = "Wow amazing video 🔥" # Fallback par défaut
+
+                    print(f"{MAGENTA}   📝 Texte à copier : {BOLD}{comment_text}{RESET}", flush=True)
+
+                    # 3. On lance la tâche en passant le texte
+                    print(f"{YELLOW}⏳ Exécution en cours...{RESET}", flush=True)
+                    success = await self.do_task(self.index + 1, full_link, action, specific_text=comment_text)
+
+                    # 4. GESTION DU GAIN (Identique au Like/Follow mais adapté)
+                    if success:
+                         # --- CALCUL GAIN COMMENTAIRE ---
+                        local_gain = 2.0 # Modifie cette valeur selon le gain réel du bot
+                        action_name = "💬 COMMENT"
+
+                        # Mise à jour stats
+                        old_balance = self.stats["earned"]
+                        new_balance = old_balance + local_gain
+                        self.stats["earned"] = new_balance
+                        self.stats["tasks"] += 1
+                        self.save_json("stats.json", self.stats)
+
+                        print(f"{GREEN}✅ {action_name} TERMINE{RESET}", flush=True)
+                        print(f"{MAGENTA}💰 SOLDE: {old_balance:.1f} + {local_gain:.1f} = {BOLD}{new_balance:.1f} CC{RESET}", flush=True)
+                        
+                        # Validation
+                        print(f"{CYAN}➡️  Validation Task...{RESET}", flush=True)
+                        if buttons:
+                            for i, row in enumerate(buttons):
+                                for j, btn in enumerate(row):
+                                    if "Completed" in btn.text or "✅" in btn.text:
+                                        await event.message.click(i, j)
+                                        return
 
                 # --- CAS LIKE / FOLLOW ---
                 else:
