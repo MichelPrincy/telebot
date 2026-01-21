@@ -165,69 +165,44 @@ class TikTokTaskBot:
             # CAS 1 : COMMENTAIRE (Nouveau)
             # ---------------------------------------------------------
             if "comment" in action_lower:
-                print(f"{MAGENTA}   💬 Mode Commentaire (Smart)...{RESET}", flush=True)
-                self.d.click(0.5, 0.5) 
-                await asyncio.sleep(1.5)
-                
-                # 1. OUVRIR LES COMMENTAIRES
-                # On cherche l'icône de bulle. Elle est souvent sous le bouton Like.
-                # Méthode A: Par Description (Accessibilité)
-                comments_opened = False
-                if self.d(descriptionMatches=COMMENT_DESC_REGEX).exists:
-                    self.d(descriptionMatches=COMMENT_DESC_REGEX).click()
-                    comments_opened = True
-                    print(f"{DIM}   -> Icône coms cliquée (Desc){RESET}")
-                
-                # Méthode B: Par Géométrie (Si pas de description)
-                # C'est généralement le bouton SOUS le bouton Like (qui est au milieu-droit)
-                elif not comments_opened:
-                    # On reprend la logique structurelle mais on vise plus bas que le Like
-                    try:
-                        buttons = self.d(className="android.widget.ImageView", clickable=True)
-                        screen_w, screen_h = self.d.window_size()
-                        for btn in buttons:
-                            bounds = btn.info['bounds']
-                            cy = (bounds['top'] + bounds['bottom']) / 2
-                            cx = (bounds['left'] + bounds['right']) / 2
-                            # Zone du bouton coms : Droite (>80%) et Bas-Milieu (>55% et <75%)
-                            if (cx > screen_w * 0.80) and (screen_h * 0.55 < cy < screen_h * 0.75):
-                                btn.click()
-                                comments_opened = True
-                                print(f"{DIM}   -> Icône coms cliquée (Geo){RESET}")
-                                break
-                    except: pass
-
-                await asyncio.sleep(2) # Attendre l'animation du tiroir
+                print(f"{MAGENTA}    💬 Mode Commentaire (Smart)...{RESET}", flush=True)
+                # On utilise les coordonnées fournies pour ouvrir la section commentaire
+                # x:990 y:1370
+                print(f"{DIM}    -> Ouverture des commentaires (990, 1370)...{RESET}")
+                os.system(f"{self.adb} input tap 990 1370")
+                await asyncio.sleep(3) # Attendre l'animation du tiroir
 
                 # 2. ECRIRE LE COMMENTAIRE
+                # On vérifie si le champ de saisie est présent (via UIAutomator si self.d est initialisé)
                 if self.d(className="android.widget.EditText").exists:
-                    # Clic pour focus
+                    # Clic pour focus sur le champ de saisie
                     self.d(className="android.widget.EditText").click()
                     await asyncio.sleep(1)
                     
-                    # --- C'EST ICI QUE ÇA CHANGE ---
-                    # Si on a reçu un texte spécifique du bot, on l'utilise.
-                    # Sinon (sécurité), on prend un texte aléatoire "Cool", "Top", etc.
-                    text_to_send = specific_text if specific_text else "Wow super video 🔥"
+                    # Détermination du texte à envoyer
+                    text_to_send = specific_text if 'specific_text' in locals() else "Wow super video 🔥"
                     
-                    print(f"{MAGENTA}   -> Écriture : {text_to_send}{RESET}")
-                    # send_keys est parfait pour écrire des phrases complètes
+                    print(f"{MAGENTA}    -> Écriture : {text_to_send}{RESET}")
+                    # Saisie du texte
                     self.d.send_keys(text_to_send)
                     await asyncio.sleep(1)
 
                     # 3. ENVOYER
+                    # Tentative de clic sur le bouton d'envoi par description
                     if self.d(descriptionMatches="(?i)(send|envoyer|publier)").exists:
                         self.d(descriptionMatches="(?i)(send|envoyer|publier)").click()
                     else:
-                        self.d.press("enter")
+                        # Alternative : Touche "Entrée" du clavier Android
+                        os.system(f"{self.adb} input keyevent 66") 
                     
-                    print(f"{GREEN}   -> Commentaire envoyé !{RESET}")
+                    print(f"{GREEN}    -> Commentaire envoyé !{RESET}")
                     await asyncio.sleep(2)
-                    # Fermer le tiroir (Clic en haut)
-                    self.d.click(0.5, 0.2)
+                    
+                    # Fermer le tiroir (Clic en haut de l'écran pour revenir à la vidéo)
+                    os.system(f"{self.adb} input tap 500 200")
 
                 else:
-                    print(f"{RED}   ❌ Champ texte introuvable !{RESET}")
+                    print(f"{RED}    ❌ Champ texte introuvable !{RESET}")
 
             # ---------------------------------------------------------
             # --- CAS FOLLOW ---
@@ -534,7 +509,7 @@ class TikTokTaskBot:
 ██║ ╚═╝ ██║██║╚██████╗██║  ██║
 ╚═╝     ╚═╝╚═╝ ╚═════╝╚═╝  ╚═╝{RESET}
 {DIM}━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━{RESET}
-{WHITE}🤖 BOT AUTOMATION V3.2.9 {DIM}|{RESET} {CYAN}BY MICH{RESET}
+{WHITE}🤖 BOT AUTOMATION V3.3.0 {DIM}|{RESET} {CYAN}BY MICH{RESET}
 {DIM}━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━{RESET}
  📱 Status ADB    : {adb_status}
  👥 Comptes        : {WHITE}{acc_count}{RESET}
