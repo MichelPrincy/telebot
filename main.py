@@ -153,7 +153,7 @@ class TikTokTaskBot:
             # ================== UIAUTOMATOR2 LOGIC (ROBUST & COMPLETE) ==================
 
             # Liste des mots clés pour "Suivre"
-            FOLLOW_KEYWORDS = ["Follow", "Suivre", "S'abonner", "Seguir"]
+            FOLLOW_KEYWORDS = ["Suivre", "S'abonner", "Follow", "Seguir"]
             # Regex pour "Like"
             LIKE_DESC_REGEX = "(?i)(like|j'aime|love|gostar|aimer)"
             # Regex pour "Commentaire"
