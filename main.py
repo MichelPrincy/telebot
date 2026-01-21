@@ -230,12 +230,15 @@ class TikTokTaskBot:
                     print(f"{RED}   ❌ Champ texte introuvable !{RESET}")
 
             # ---------------------------------------------------------
-            # CAS 2 : FOLLOW
-            # ---------------------------------------------------------
-            elif "follow" in action_lower or "profile" in action_lower:
+            # --- CAS FOLLOW ---
+            if "follow" in action_lower or "profile" in action_lower:
                 print(f"{CYAN}   👤 Recherche bouton Follow (Smart)...{RESET}", flush=True)
+                
+                # On construit une requête XPATH ou une boucle pour vérifier les textes
+                # C'est plus rapide de vérifier l'existence via une boucle locale
                 clicked = False
                 for keyword in FOLLOW_KEYWORDS:
+                    # On cherche un élément qui contient le texte ET qui est cliquable
                     if self.d(textContains=keyword).exists:
                         self.d(textContains=keyword).click()
                         print(f"{GREEN}   -> Clic sur '{keyword}'{RESET}")
@@ -243,53 +246,78 @@ class TikTokTaskBot:
                         break
                 
                 if not clicked:
-                    # Fallback ID
+                    # TENTATIVE AVANCÉE : Chercher par Resource ID commun si le texte échoue
+                    # Souvent le bouton follow est un bouton rouge spécifique
+                    # Note: ceci est un exemple, l'ID change selon les versions de l'app
                     if self.d(resourceIdMatches=".*follow_btn.*").exists:
                          self.d(resourceIdMatches=".*follow_btn.*").click()
                          print(f"{GREEN}   -> Clic sur Follow (via ID){RESET}")
                     else:
-                        print(f"{RED}   ❌ Bouton Follow introuvable{RESET}")
-
-            # ---------------------------------------------------------
-            # CAS 3 : LIKE
-            # ---------------------------------------------------------
+                        print(f"{RED}   ❌ Bouton Follow introuvable (Textes/ID testés){RESET}")
+                        # Fallback ADB manuel si vraiment nécessaire
+                        # os.system(f"{self.adb} input tap 240 800")
+            
+            # --- CAS LIKE ---
             else:
                 print(f"{CYAN}   ❤️  Mode Like (Smart Logic)...{RESET}", flush=True)
+            
+                # 1. PAUSE (Recommandé pour stabiliser l'UI)
+                # Clic central simple
                 self.d.click(0.5, 0.5) 
                 await asyncio.sleep(0.5)
+            
+                # 2. LOGIQUE DE DÉTECTION DU CŒUR
                 liked_success = False
-
-                # Méthode A: Description
+            
+                # MÉTHODE A : Par Description (Accessibilité) avec Regex
+                # Cela couvre "Like video", "J'aime la vidéo", "Double tap to like"
                 if self.d(descriptionMatches=LIKE_DESC_REGEX).exists:
+                    print(f"{GREEN}   -> Détection via Description (Accessibilité){RESET}")
                     self.d(descriptionMatches=LIKE_DESC_REGEX).click()
                     liked_success = True
-                    print(f"{GREEN}   -> Like (Desc){RESET}")
-
-                # Méthode B: Structure (si description échoue)
+            
+                # MÉTHODE B : Par Position (Hierarchie XML) - TRÈS ROBUSTE
+                # Si la description échoue, on sait que le bouton Like est généralement 
+                # dans un LinearLayout à droite. C'est souvent une ImageView.
+                # On cherche l'élément qui a la même classe que les autres icônes
                 elif not liked_success:
+                    print(f"{YELLOW}   ⚠️ Description absente, analyse de la structure...{RESET}")
+                    
+                    # Sur TikTok, les icônes de droite sont souvent des ImageView clickable
+                    # Le Like est souvent le 2ème ou 3ème élément clickable en partant du haut (Profil > Like > Coms)
+                    # Ceci est un exemple de logique puissante :
                     try:
+                        # On cherche toutes les ImageViews clickables sur la moitié droite de l'écran
                         buttons = self.d(className="android.widget.ImageView", clickable=True)
-                        screen_w, screen_h = self.d.window_size()
+                        
                         for btn in buttons:
-                            bounds = btn.info['bounds']
-                            cy = (bounds['top'] + bounds['bottom']) / 2
-                            cx = (bounds['left'] + bounds['right']) / 2
-                            # Zone Like : Droite et Milieu-Haut
-                            if (cx > screen_w * 0.80) and (screen_h * 0.35 < cy < screen_h * 0.55):
+                            info = btn.info
+                            bounds = info['bounds']
+                            center_x = (bounds['left'] + bounds['right']) / 2
+                            center_y = (bounds['top'] + bounds['bottom']) / 2
+                            
+                            # Le bouton Like est à Droite (> 80% largeur) et au Milieu-Haut (~40-50% hauteur)
+                            screen_w, screen_h = self.d.window_size()
+                            
+                            if (center_x > screen_w * 0.80) and (screen_h * 0.35 < center_y < screen_h * 0.55):
+                                print(f"{GREEN}   -> Bouton détecté par coordonnées géométriques !{RESET}")
                                 btn.click()
                                 liked_success = True
-                                print(f"{GREEN}   -> Like (Geo){RESET}")
                                 break
-                    except: pass
-
-                # Méthode C: Double Tap (Ultime recours)
+                    except Exception as e:
+                        print(f"Erreur logique structurelle: {e}")
+            
+                # MÉTHODE C : L'ARME ABSOLUE (Double Tap)
+                # Si on n'arrive pas à cliquer sur le bouton spécifique, on double-tap la vidéo.
                 if not liked_success:
-                    print(f"{MAGENTA}   🚀 Fallback : DOUBLE TAP{RESET}")
+                    print(f"{MAGENTA}   🚀 Fallback Ultime : DOUBLE TAP vidéo{RESET}")
+                    # Double clic au centre de l'écran (0.5, 0.5)
                     self.d.double_click(0.5, 0.5, duration=0.1) 
                     liked_success = True
-
+            
                 if liked_success:
-                    await asyncio.sleep(1)
+                    print(f"{DIM}   -> Like effectué.{RESET}")
+                   
 
             await asyncio.sleep(3)
             os.system(f"{self.adb} am force-stop {CLONE_CONTAINER_PACKAGE}")
