@@ -140,14 +140,14 @@ class TikTokTaskBot:
             os.system(f'{self.adb} am start -a android.intent.action.VIEW -d "{link}" > /dev/null 2>&1')
             await asyncio.sleep(5)
             os.system(f"{self.adb} input tap {coord_clone}")
-            await asyncio.sleep(20) # Temps de chargement
+            await asyncio.sleep(25) # Temps de chargement
 
             # 2. Réouverture / Refresh ADB (Classique)
             os.system(f'{self.adb} am start -a android.intent.action.VIEW -d "{link}" > /dev/null 2>&1')
-            await asyncio.sleep(5)
+            await asyncio.sleep(3)
             os.system(f"{self.adb} input tap {coord_clone}")
             
-            print(f"{YELLOW}⏳ Attente stricte 10s...{RESET}", flush=True)
+            print(f"{YELLOW}⏳ Attente stricte 6s...{RESET}", flush=True)
             await asyncio.sleep(6)
 
             # ================== UIAUTOMATOR2 LOGIC (ROBUST & COMPLETE) ==================
@@ -166,6 +166,8 @@ class TikTokTaskBot:
             # ---------------------------------------------------------
             if "comment" in action_lower:
                 print(f"{MAGENTA}   💬 Mode Commentaire (Smart)...{RESET}", flush=True)
+                self.d.click(0.5, 0.5) 
+                await asyncio.sleep(1.5)
                 
                 # 1. OUVRIR LES COMMENTAIRES
                 # On cherche l'icône de bulle. Elle est souvent sous le bouton Like.
@@ -504,7 +506,7 @@ class TikTokTaskBot:
 ██║ ╚═╝ ██║██║╚██████╗██║  ██║
 ╚═╝     ╚═╝╚═╝ ╚═════╝╚═╝  ╚═╝{RESET}
 {DIM}━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━{RESET}
-{WHITE}🤖 BOT AUTOMATION V3.2.7 {DIM}|{RESET} {CYAN}BY MICH{RESET}
+{WHITE}🤖 BOT AUTOMATION V3.2.8 {DIM}|{RESET} {CYAN}BY MICH{RESET}
 {DIM}━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━{RESET}
  📱 Status ADB    : {adb_status}
  👥 Comptes        : {WHITE}{acc_count}{RESET}
