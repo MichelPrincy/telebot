@@ -187,13 +187,44 @@ class TikTokTaskBot:
                     self.d.send_keys(text_to_send)
                     await asyncio.sleep(1)
 
-                    # 3. ENVOYER
-                    # Tentative de clic sur le bouton d'envoi par description
-                    if self.d(descriptionMatches="(?i)(send|envoyer|publier)").exists:
-                        self.d(descriptionMatches="(?i)(send|envoyer|publier)").click()
-                    else:
-                        # Alternative : Touche "Entrée" du clavier Android
-                        os.system(f"{self.adb} input keyevent 66") 
+                    # 3. ENVOYER LE COMMENTAIRE
+                    # Note : uiautomator2 ne détecte pas les couleurs (#fe2c55). 
+                    # Nous ciblons donc les propriétés logiques du bouton.
+                    
+                    sent = False
+                    
+                    # Méthode A : Ciblage par Resource ID (Le plus précis pour le bouton rouge)
+                    # Vous devez remplacer 'com.zhiliaoapp.musically:id/xxx' par l'ID réel si vous le connaissez.
+                    # Souvent, le bouton d'envoi contient "send" ou "publish" dans son ID.
+                    send_btn = self.d(resourceIdMatches="(?i).*id/(send_btn|publish_button|comment_publish_img)")
+                    
+                    if send_btn.exists:
+                        send_btn.click()
+                        sent = True
+                    
+                    # Méthode B : Ciblage par Description ou Classe (Si l'ID change)
+                    # On cherche une image cliquable qui correspond à "envoyer" ou qui est activée
+                    if not sent:
+                        # Souvent le bouton rouge est une ImageView avec une description spécifique
+                        if self.d(descriptionMatches="(?i)(send|envoyer|publier)").exists:
+                            self.d(descriptionMatches="(?i)(send|envoyer|publier)").click()
+                            sent = True
+                        
+                        # Sinon, on cherche la dernière "ImageView" cliquable à l'écran (souvent le bouton send est en bas à droite)
+                        elif self.d(className="android.widget.ImageView", clickable=True).exists:
+                            # On clique sur le dernier élément image cliquable trouvé (souvent le bouton d'envoi)
+                            buttons = self.d(className="android.widget.ImageView", clickable=True)
+                            count = buttons.count
+                            if count > 0:
+                                buttons[count - 1].click()
+                                sent = True
+                    
+                    # Méthode C : Fallback (Clic sur coordonnées fixes)
+                    # Si aucune méthode de détection automatique n'a fonctionné
+                    if not sent:
+                        print("Bouton non détecté via XML, tentative de clic aux coordonnées X:960 Y:1040.")
+                        self.d.click(960, 1040) 
+                        sent = True
                     
                     print(f"{GREEN}    -> Commentaire envoyé !{RESET}")
                     await asyncio.sleep(2)
@@ -509,7 +540,7 @@ class TikTokTaskBot:
 ██║ ╚═╝ ██║██║╚██████╗██║  ██║
 ╚═╝     ╚═╝╚═╝ ╚═════╝╚═╝  ╚═╝{RESET}
 {DIM}━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━{RESET}
-{WHITE}🤖 BOT AUTOMATION V3.3.0 {DIM}|{RESET} {CYAN}BY MICH{RESET}
+{WHITE}🤖 BOT AUTOMATION V3.3.1 {DIM}|{RESET} {CYAN}BY MICH{RESET}
 {DIM}━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━{RESET}
  📱 Status ADB    : {adb_status}
  👥 Comptes        : {WHITE}{acc_count}{RESET}
