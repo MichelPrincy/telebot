@@ -5,7 +5,7 @@ import re
 import subprocess
 import time
 import requests
-import uiautomator2 as u2  # <--- NOUVEL IMPORT
+import uiautomator2 as u2  # <--- NOUVEL 
 from dotenv import load_dotenv
 from telethon import TelegramClient, events
 from telethon.tl.types import MessageEntityTextUrl
