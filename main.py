@@ -210,14 +210,6 @@ class TikTokTaskBot:
                             self.d(descriptionMatches="(?i)(send|envoyer|publier)").click()
                             sent = True
                         
-                        # Sinon, on cherche la dernière "ImageView" cliquable à l'écran (souvent le bouton send est en bas à droite)
-                        elif self.d(className="android.widget.ImageView", clickable=True).exists:
-                            # On clique sur le dernier élément image cliquable trouvé (souvent le bouton d'envoi)
-                            buttons = self.d(className="android.widget.ImageView", clickable=True)
-                            count = buttons.count
-                            if count > 0:
-                                buttons[count - 1].click()
-                                sent = True
                     
                     # Méthode C : Fallback (Clic sur coordonnées fixes)
                     # Si aucune méthode de détection automatique n'a fonctionné
@@ -540,7 +532,7 @@ class TikTokTaskBot:
 ██║ ╚═╝ ██║██║╚██████╗██║  ██║
 ╚═╝     ╚═╝╚═╝ ╚═════╝╚═╝  ╚═╝{RESET}
 {DIM}━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━{RESET}
-{WHITE}🤖 BOT AUTOMATION V3.3.1 {DIM}|{RESET} {CYAN}BY MICH{RESET}
+{WHITE}🤖 BOT AUTOMATION V3.3.2 {DIM}|{RESET} {CYAN}BY MICH{RESET}
 {DIM}━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━{RESET}
  📱 Status ADB    : {adb_status}
  👥 Comptes        : {WHITE}{acc_count}{RESET}
