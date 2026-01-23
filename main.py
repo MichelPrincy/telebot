@@ -199,18 +199,9 @@ class TikTokTaskBot:
                     send_btn = self.d(resourceIdMatches="(?i).*id/(send_btn|publish_button|comment_publish_img)")
                     
                     if send_btn.exists:
-                        send_btn.click()
+                        self.d.click(960, 1040) 
                         sent = True
-                    
-                    # Méthode B : Ciblage par Description ou Classe (Si l'ID change)
-                    # On cherche une image cliquable qui correspond à "envoyer" ou qui est activée
-                    if not sent:
-                        # Souvent le bouton rouge est une ImageView avec une description spécifique
-                        if self.d(descriptionMatches="(?i)(send|envoyer|publier)").exists:
-                            self.d(descriptionMatches="(?i)(send|envoyer|publier)").click()
-                            sent = True
-                        
-                    
+                  
                     # Méthode C : Fallback (Clic sur coordonnées fixes)
                     # Si aucune méthode de détection automatique n'a fonctionné
                     if not sent:
@@ -532,7 +523,7 @@ class TikTokTaskBot:
 ██║ ╚═╝ ██║██║╚██████╗██║  ██║
 ╚═╝     ╚═╝╚═╝ ╚═════╝╚═╝  ╚═╝{RESET}
 {DIM}━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━{RESET}
-{WHITE}🤖 BOT AUTOMATION V3.3.2 {DIM}|{RESET} {CYAN}BY MICH{RESET}
+{WHITE}🤖 BOT AUTOMATION V3.3.3 {DIM}|{RESET} {CYAN}BY MICH{RESET}
 {DIM}━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━{RESET}
  📱 Status ADB    : {adb_status}
  👥 Comptes        : {WHITE}{acc_count}{RESET}
