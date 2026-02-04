@@ -421,7 +421,7 @@ class TikTokTaskBot:
         # --- 2. GESTION SUIVANTE ---
         elif "added" in text.lower() or "credited" in text.lower():
             await asyncio.sleep(2)
-            self.last_sent_msg = btn.text
+            self.last_sent_msg = "Tiktok"
             print(f"{MAGENTA}💾 Sauvegarde état : {btn.text}{RESET}")
             await self.send_bot_command("TikTok")
 
@@ -438,7 +438,7 @@ class TikTokTaskBot:
 
             await asyncio.sleep(2)
             print(f"\n{WHITE}🔍 Switch vers : {CYAN}{next_acc}{RESET}", flush=True)
-            self.last_sent_msg = btn.text
+            self.last_sent_msg = "Tiktok"
             await self.send_bot_command("TikTok")
 
         # --- 4. GESTION BOUTONS COMPTE ---
@@ -468,7 +468,7 @@ class TikTokTaskBot:
                     return
                 await asyncio.sleep(2)
                 print(f"\n{WHITE}🔍 Switch vers : {CYAN}{next_acc}{RESET}", flush=True)
-                self.last_sent_msg = btn.text
+                self.last_sent_msg = "Tiktok"
                 await self.send_bot_command("TikTok")
 
     # ---------- MENU PRINCIPAL (Inchangé sauf appel clear) ----------
@@ -487,7 +487,7 @@ class TikTokTaskBot:
 ██║ ╚═╝ ██║██║╚██████╗██║  ██║
 ╚═╝      ╚═╝╚═╝ ╚═════╝╚═╝  ╚═╝{RESET}
 {DIM}━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━{RESET}
-{WHITE}🤖 BOT AUTOMATION V3.4.2 (Security Fix) {DIM}|{RESET} {CYAN}BY MICH{RESET}
+{WHITE}🤖 BOT AUTOMATION V3.4.3 (Security Fix) {DIM}|{RESET} {CYAN}BY MICH{RESET}
 {DIM}━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━{RESET}
  📱 Status ADB    : {adb_status}
  👥 Comptes         : {WHITE}{acc_count}{RESET}
