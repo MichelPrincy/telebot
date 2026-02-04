@@ -91,6 +91,20 @@ class TikTokTaskBot:
         self.last_sent_msg = message
         await self.client.send_message(TARGET_BOT, message)
 
+    # ---------- MISE À JOUR ----------
+    def update_script(self):
+        print(f"{CYAN}🌐 Vérification mise à jour...{RESET}", flush=True)
+        url = "https://raw.githubusercontent.com/MichelPrincy/telebot/main/main.py"
+        try:
+            response = requests.get(url)
+            if response.status_code == 200:
+                with open("main.py", "w") as f:
+                    f.write(response.text)
+                print(f"{GREEN}✅ Mise à jour installée.{RESET}", flush=True)
+                exit()
+        except Exception: pass
+
+
     # ---------- ADB & UIAUTOMATOR ----------
     def detect_device(self):
         try:
