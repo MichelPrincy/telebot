@@ -139,7 +139,7 @@ class TikTokTaskBot:
     def focus_termux(self):
         os.system(f"{self.adb} am start --activity-brought-to-front {TERMUX_PACKAGE} > /dev/null 2>&1")
 
-    # ---------- ACTIONS TIKTOK ----------
+    # ---------- ACTIONS  ----------
     async def do_task(self, account_idx, link, action, specific_text=None):
         try:
             self.cleanup_apps()
@@ -386,6 +386,9 @@ class TikTokTaskBot:
                                     if "Completed" in btn.text or "✅" in btn.text:
                                         # On ne change pas self.last_sent_msg ici car c'est un click
                                         # Mais logiquement on veut souvent redemander une tache après
+                                        # 👇 AJOUT ICI : On sauvegarde l'action "Completed"
+                                        self.last_sent_msg = btn.text
+                                        print(f"{MAGENTA}💾 Sauvegarde état : {btn.text}{RESET}")
                                         await event.message.click(i, j)
                                         return
 
@@ -406,6 +409,9 @@ class TikTokTaskBot:
                             for i, row in enumerate(buttons):
                                 for j, btn in enumerate(row):
                                     if "Completed" in btn.text or "✅" in btn.text:
+                                        # 👇 AJOUT ICI : On sauvegarde l'action "Completed"
+                                        self.last_sent_msg = btn.text
+                                        print(f"{MAGENTA}💾 Sauvegarde état : {btn.text}{RESET}")
                                         # Clic sur Completed
                                         await event.message.click(i, j)
                                         # NOTE : Si un captcha arrive juste après ce clic, 
@@ -415,6 +421,8 @@ class TikTokTaskBot:
         # --- 2. GESTION SUIVANTE ---
         elif "added" in text.lower() or "credited" in text.lower():
             await asyncio.sleep(2)
+            self.last_sent_msg = btn.text
+            print(f"{MAGENTA}💾 Sauvegarde état : {btn.text}{RESET}")
             await self.send_bot_command("TikTok")
 
         # --- 3. PAS DE TASK ---
@@ -430,6 +438,7 @@ class TikTokTaskBot:
 
             await asyncio.sleep(2)
             print(f"\n{WHITE}🔍 Switch vers : {CYAN}{next_acc}{RESET}", flush=True)
+            self.last_sent_msg = btn.text
             await self.send_bot_command("TikTok")
 
         # --- 4. GESTION BOUTONS COMPTE ---
@@ -439,6 +448,9 @@ class TikTokTaskBot:
             for i, row in enumerate(buttons):
                 for j, btn in enumerate(row):
                     if btn.text == target:
+                        # 👇 AJOUT ICI : On sauvegarde l'action "Completed"
+                        self.last_sent_msg = btn.text
+                        print(f"{MAGENTA}💾 Sauvegarde état : {btn.text}{RESET}")
                         await event.message.click(i, j)
                         clicked = True
                         return
@@ -456,6 +468,7 @@ class TikTokTaskBot:
                     return
                 await asyncio.sleep(2)
                 print(f"\n{WHITE}🔍 Switch vers : {CYAN}{next_acc}{RESET}", flush=True)
+                self.last_sent_msg = btn.text
                 await self.send_bot_command("TikTok")
 
     # ---------- MENU PRINCIPAL (Inchangé sauf appel clear) ----------
@@ -474,7 +487,7 @@ class TikTokTaskBot:
 ██║ ╚═╝ ██║██║╚██████╗██║  ██║
 ╚═╝      ╚═╝╚═╝ ╚═════╝╚═╝  ╚═╝{RESET}
 {DIM}━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━{RESET}
-{WHITE}🤖 BOT AUTOMATION V3.4.1 (Security Fix) {DIM}|{RESET} {CYAN}BY MICH{RESET}
+{WHITE}🤖 BOT AUTOMATION V3.4.2 (Security Fix) {DIM}|{RESET} {CYAN}BY MICH{RESET}
 {DIM}━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━{RESET}
  📱 Status ADB    : {adb_status}
  👥 Comptes         : {WHITE}{acc_count}{RESET}
