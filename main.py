@@ -133,9 +133,9 @@ class TikTokTaskBot:
             
             # 1. Ouverture ADB
             os.system(f'{self.adb} am start -a android.intent.action.VIEW -d "{link}" > /dev/null 2>&1')
-            await asyncio.sleep(5)
+            await asyncio.sleep(4)
             os.system(f"{self.adb} input tap {coord_clone}")
-            await asyncio.sleep(25) # Chargement
+            await asyncio.sleep(15) # Chargement
 
             # 2. Refresh
             os.system(f'{self.adb} am start -a android.intent.action.VIEW -d "{link}" > /dev/null 2>&1')
@@ -143,7 +143,7 @@ class TikTokTaskBot:
             os.system(f"{self.adb} input tap {coord_clone}")
             
             print(f"{YELLOW}⏳ Attente stricte 6s...{RESET}", flush=True)
-            await asyncio.sleep(6)
+            await asyncio.sleep(5)
 
             # --- LOGIQUE UIAUTOMATOR ---
             FOLLOW_KEYWORDS = ["Suivre", "S'abonner", "Follow", "Seguir"]
@@ -424,7 +424,7 @@ class TikTokTaskBot:
 ██║ ╚═╝ ██║██║╚██████╗██║  ██║
 ╚═╝      ╚═╝╚═╝ ╚═════╝╚═╝  ╚═╝{RESET}
 {DIM}━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━{RESET}
-{WHITE}🤖 BOT AUTOMATION V3.4 (Security Fix) {DIM}|{RESET} {CYAN}BY MICH{RESET}
+{WHITE}🤖 BOT AUTOMATION V3.4.1 (Security Fix) {DIM}|{RESET} {CYAN}BY MICH{RESET}
 {DIM}━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━{RESET}
  📱 Status ADB    : {adb_status}
  👥 Comptes         : {WHITE}{acc_count}{RESET}
