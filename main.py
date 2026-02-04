@@ -252,46 +252,82 @@ class TikTokTaskBot:
         buttons = event.message.buttons
 
         # =========================================================================
-        # 🛡️ GESTION DU SECURITY CHECK (NOUVEAU CODE)
+        # 🛡️ GESTION DU SECURITY CHECK (CORRIGÉ & COMPLET)
         # =========================================================================
         if "Security check" in text and "verification" in text:
             print(f"\n{RED}{BOLD}🛡️ SECURITY CHECK DETECTÉ !{RESET}")
             
-            # 1. Extraction du lien
-            url_match = re.search(r'(https?://smmkingdom\.com/tasker/captcha-test/\S+)', text)
+            # --- 1. Extraction du lien (Méthode Robuste comme dans les Tasks) ---
+            full_link = None
             
-            if url_match:
-                link = url_match.group(1)
-                # Nettoyage si le lien capture la parenthèse fermante
-                link = link.rstrip(')')
+            # A. On cherche d'abord dans les entités (Hyperliens cachés)
+            if event.message.entities:
+                for entity in event.message.entities:
+                    if isinstance(entity, MessageEntityTextUrl):
+                        # On vérifie si c'est bien le lien smmkingdom
+                        if "smmkingdom.com" in entity.url:
+                            full_link = entity.url
+                            break
+            
+            # B. Si pas trouvé dans les entités, on tente le Regex sur le texte brut
+            if not full_link:
+                url_match = re.search(r'(https?://smmkingdom\.com/tasker/captcha-test/\S+)', text)
+                if url_match:
+                    full_link = url_match.group(1).rstrip(')')
+
+            if full_link:
+                print(f"{WHITE}🔗 Lien Captcha Trouvé : {CYAN}{full_link}{RESET}")
                 
-                print(f"{WHITE}🔗 Lien Captcha : {CYAN}{link}{RESET}")
-                
-                # 2. Ouverture Chrome via ADB
+                # --- 2. Ouverture Chrome via ADB ---
                 print(f"{YELLOW}🌍 Ouverture Chrome...{RESET}")
-                # On utilise l'Activity spécifique de Chrome pour être sûr
-                cmd_open = f'{self.adb} am start -n {CHROME_ACTIVITY} -d "{link}" > /dev/null 2>&1'
+                cmd_open = f'{self.adb} am start -n {CHROME_ACTIVITY} -d "{full_link}" > /dev/null 2>&1'
                 os.system(cmd_open)
                 
-                # 3. Attente 15s
-                print(f"{YELLOW}⏱️  Attente 15 secondes pour validation...{RESET}")
-                await asyncio.sleep(15)
+                # --- 3. Attente 15s (Chargement page) ---
+                print(f"{YELLOW}⏱️  Attente 15 secondes pour chargement...{RESET}")
+                await asyncio.sleep(25)
                 
-                # 4. Fermeture Chrome
+                # --- 4. Clic sur le bouton "Continuer" via UIAutomator2 ---
+                print(f"{YELLOW}point_up  Tentative de clic sur le bouton de vérification...{RESET}")
+                try:
+                    # Connexion à l'appareil (peut être déplacé dans __init__ pour gagner du temps)
+                    # Si tu utilises un ID d'appareil spécifique, mets-le dans connect('ID')
+                    d = u2.connect() 
+                    
+                    # On cherche un bouton qui contient "Click here" ou "Verify" ou "Continue"
+                    # Adapte le texte selon ce qui est écrit sur le bouton du site
+                    if d(textContains="Continue").exists(timeout=5):
+                        d(textContains="Continue").click()
+                        print(f"{GREEN}✅ Clic effectué sur 'Click here'{RESET}")
+                    elif d(textContains="Verify").exists(timeout=2):
+                        d(textContains="Verify").click()
+                        print(f"{GREEN}✅ Clic effectué sur 'Verify'{RESET}")
+                    elif d(className="android.widget.Button").exists(timeout=2):
+                        # Fallback : Clique sur le premier bouton trouvé si pas de texte
+                        d(className="android.widget.Button").click()
+                        print(f"{GREEN}✅ Clic effectué sur un bouton générique{RESET}")
+                    else:
+                        print(f"{RED}⚠️ Aucun bouton détecté, tentative manuelle ou page déjà validée.{RESET}")
+                    
+                    # Petite pause pour laisser le site valider le clic
+                    await asyncio.sleep(5)
+                    
+                except Exception as e:
+                    print(f"{RED}❌ Erreur uiautomator2 : {e}{RESET}")
+
+                # --- 5. Fermeture Chrome ---
                 print(f"{YELLOW}🔒 Fermeture Chrome...{RESET}")
                 os.system(f'{self.adb} am force-stop {CHROME_PKG_NAME} > /dev/null 2>&1')
                 self.focus_termux()
                 
-                # 5. Renvoyer la dernière commande
-                print(f"{GREEN}✅ Vérification terminée (théoriquement).{RESET}")
+                # --- 6. Renvoyer la dernière commande ---
+                print(f"{GREEN}✅ Vérification terminée.{RESET}")
                 print(f"{CYAN}🔄 Renvoi de la dernière commande : {BOLD}{self.last_sent_msg}{RESET}")
                 
-                # On renvoie ce qu'on avait stocké
                 await self.send_bot_command(self.last_sent_msg)
                 return
             else:
-                print(f"{RED}❌ Impossible d'extraire le lien du Security Check.{RESET}")
-                # Dans le doute, on renvoie TikTok pour relancer
+                print(f"{RED}❌ Impossible d'extraire le lien du Security Check (Ni entité, ni regex).{RESET}")
                 await self.send_bot_command("TikTok")
                 return
         # =========================================================================
