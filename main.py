@@ -5,12 +5,12 @@ import re
 import subprocess
 import time
 import requests
-import uiautomator2 as u2  # <--- NOUVEL 
+import uiautomator2 as u2
 from dotenv import load_dotenv
 from telethon import TelegramClient, events
 from telethon.tl.types import MessageEntityTextUrl
 
-# ================== COULEURS & STYLES (DESIGN) ==================
+# ================== COULEURS & STYLES ==================
 RED = "\033[91m"
 GREEN = "\033[92m"
 YELLOW = "\033[93m"
@@ -25,20 +25,20 @@ RESET = "\033[0m"
 # ================== PACKAGES ==================
 CLONE_CONTAINER_PACKAGE = "com.waxmoon.ma.gp"
 TERMUX_PACKAGE = "com.termux/com.termux.app.TermuxActivity"
+# Correction: Nom du package seul pour le force-stop, et ComponentName pour le start
+CHROME_PKG_NAME = "com.android.chrome"
+CHROME_ACTIVITY = "com.android.chrome/com.google.android.apps.chrome.Main"
 
 # ================== VALEURS DES GAINS ==================
 GAIN_LIKE = 1.1
 GAIN_FOLLOW = 3.0
 
-# ================== COORDONNÉES (ADB FALLBACK) ==================
+# ================== COORDONNÉES ==================
 APP_CHOOSER = {
     1: "150 1800", 2: "350 1800", 3: "530 1800", 4: "740 1800",
     5: "930 1800", 6: "150 2015", 7: "340 2015", 8: "530 2015",
     9: "740 2015", 10: "930 2015",
 }
-FOLLOW_BUTTON = "180 547"
-# On garde les coordonnées pour le refresh manuel si besoin
-SWIPE_REFRESH = "900 450 900 980 500"
 
 # ================== TELEGRAM ==================
 API_ID = 21426921
@@ -59,7 +59,9 @@ class TikTokTaskBot:
         self.device_id = None
         self.adb = "adb shell"
         self.client = TelegramClient("session_bot", API_ID, API_HASH)
-        self.d = None # Instance uiautomator2
+        self.d = None 
+        # NOUVEAU : Variable pour mémoriser la dernière commande envoyée
+        self.last_sent_msg = "TikTok" 
 
     def load_json(self, file, default):
         if os.path.exists(file):
@@ -83,18 +85,11 @@ class TikTokTaskBot:
         print(f"{RED}⚠️ ATTENTION : Tous les comptes sont en pause !{RESET}")
         return start_index 
 
-     # ---------- MISE À JOUR ----------
-    def update_script(self):
-        print(f"{CYAN}🌐 Vérification mise à jour...{RESET}", flush=True)
-        url = "https://raw.githubusercontent.com/MichelPrincy/telebot/main/main.py"
-        try:
-            response = requests.get(url)
-            if response.status_code == 200:
-                with open("main.py", "w") as f:
-                    f.write(response.text)
-                print(f"{GREEN}✅ Mise à jour installée.{RESET}", flush=True)
-                exit()
-        except Exception: pass
+    # ---------- HELPER POUR ENVOYER ET MÉMORISER ----------
+    async def send_bot_command(self, message):
+        """Envoie un message et le mémorise pour le renvoi après Security Check"""
+        self.last_sent_msg = message
+        await self.client.send_message(TARGET_BOT, message)
 
     # ---------- ADB & UIAUTOMATOR ----------
     def detect_device(self):
@@ -109,14 +104,14 @@ class TikTokTaskBot:
                     break
             
             if found:
-                # Connexion Uiautomator2
                 try:
-                    print(f"{YELLOW}🔌 Connexion uiautomator2...{RESET}")
-                    self.d = u2.connect(self.device_id)
-                    # Optionnel: Accélère u2
-                    self.d.implicitly_wait(10.0) 
-                    self.d.settings['operation_delay'] = (0.2, 0.2)
-                    print(f"{GREEN}✅ Uiautomator2 Connecté!{RESET}")
+                    # On ne spam pas le log connexion si déjà connecté
+                    if self.d is None:
+                        print(f"{YELLOW}🔌 Connexion uiautomator2...{RESET}")
+                        self.d = u2.connect(self.device_id)
+                        self.d.implicitly_wait(10.0) 
+                        self.d.settings['operation_delay'] = (0.2, 0.2)
+                        print(f"{GREEN}✅ Uiautomator2 Connecté!{RESET}")
                 except Exception as e:
                     print(f"{RED}Erreur connexion U2: {e}{RESET}")
                 return True
@@ -130,19 +125,19 @@ class TikTokTaskBot:
     def focus_termux(self):
         os.system(f"{self.adb} am start --activity-brought-to-front {TERMUX_PACKAGE} > /dev/null 2>&1")
 
-    # ---------- ACTIONS TIKTOK (HYBRIDE ADB + U2) ----------
-    async def do_task(self, account_idx, link, action, specific_text=None):  # <--- AJOUTE CECI
+    # ---------- ACTIONS TIKTOK ----------
+    async def do_task(self, account_idx, link, action, specific_text=None):
         try:
             self.cleanup_apps()
             coord_clone = APP_CHOOSER.get(account_idx, "100 1100")
             
-            # 1. Ouverture ADB (Classique)
+            # 1. Ouverture ADB
             os.system(f'{self.adb} am start -a android.intent.action.VIEW -d "{link}" > /dev/null 2>&1')
             await asyncio.sleep(5)
             os.system(f"{self.adb} input tap {coord_clone}")
-            await asyncio.sleep(25) # Temps de chargement
+            await asyncio.sleep(25) # Chargement
 
-            # 2. Réouverture / Refresh ADB (Classique)
+            # 2. Refresh
             os.system(f'{self.adb} am start -a android.intent.action.VIEW -d "{link}" > /dev/null 2>&1')
             await asyncio.sleep(3)
             os.system(f"{self.adb} input tap {coord_clone}")
@@ -150,163 +145,76 @@ class TikTokTaskBot:
             print(f"{YELLOW}⏳ Attente stricte 6s...{RESET}", flush=True)
             await asyncio.sleep(6)
 
-            # ================== UIAUTOMATOR2 LOGIC (ROBUST & COMPLETE) ==================
-
-            # Liste des mots clés pour "Suivre"
+            # --- LOGIQUE UIAUTOMATOR ---
             FOLLOW_KEYWORDS = ["Suivre", "S'abonner", "Follow", "Seguir"]
-            # Regex pour "Like"
             LIKE_DESC_REGEX = "(?i)(like|j'aime|love|gostar|aimer)"
-            # Regex pour "Commentaire"
-            COMMENT_DESC_REGEX = "(?i)(comment|commentaire|comentar|reply)"
-
             action_lower = action.lower()
             
-            # ---------------------------------------------------------
-            # CAS 1 : COMMENTAIRE (Nouveau)
-            # ---------------------------------------------------------
+            # --- COMMENTAIRE ---
             if "comment" in action_lower:
-                print(f"{MAGENTA}    💬 Mode Commentaire (Smart)...{RESET}", flush=True)
-                # On utilise les coordonnées fournies pour ouvrir la section commentaire
-                # x:990 y:1370
-                print(f"{DIM}    -> Ouverture des commentaires (990, 1370)...{RESET}")
+                print(f"{MAGENTA}    💬 Mode Commentaire...{RESET}", flush=True)
                 os.system(f"{self.adb} input tap 990 1370")
-                await asyncio.sleep(3) # Attendre l'animation du tiroir
+                await asyncio.sleep(3)
 
-                # 2. ECRIRE LE COMMENTAIRE
-                # On vérifie si le champ de saisie est présent (via UIAutomator si self.d est initialisé)
                 if self.d(className="android.widget.EditText").exists:
-                    # Clic pour focus sur le champ de saisie
                     self.d(className="android.widget.EditText").click()
                     await asyncio.sleep(1)
                     
-                    # Détermination du texte à envoyer
-                    text_to_send = specific_text if 'specific_text' in locals() else "Wow super video 🔥"
-                    
+                    text_to_send = specific_text if specific_text else "Wow super video 🔥"
                     print(f"{MAGENTA}    -> Écriture : {text_to_send}{RESET}")
-                    # Saisie du texte
                     self.d.send_keys(text_to_send)
                     await asyncio.sleep(1)
 
-                    # 3. ENVOYER LE COMMENTAIRE
-                    # Note : uiautomator2 ne détecte pas les couleurs (#fe2c55). 
-                    # Nous ciblons donc les propriétés logiques du bouton.
-                    
                     sent = False
-                    
-                    # Méthode A : Ciblage par Resource ID (Le plus précis pour le bouton rouge)
-                    # Vous devez remplacer 'com.zhiliaoapp.musically:id/xxx' par l'ID réel si vous le connaissez.
-                    # Souvent, le bouton d'envoi contient "send" ou "publish" dans son ID.
                     send_btn = self.d(resourceIdMatches="(?i).*id/(send_btn|publish_button|comment_publish_img)")
-                    
                     if send_btn.exists:
-                        self.d.click(960, 1040) 
+                        # self.d.click(960, 1040) # Parfois le click direct element est mieux
+                        send_btn.click()
                         sent = True
-                  
-                    # Méthode C : Fallback (Clic sur coordonnées fixes)
-                    # Si aucune méthode de détection automatique n'a fonctionné
+                    
                     if not sent:
-                        print("Bouton non détecté via XML, tentative de clic aux coordonnées X:960 Y:1040.")
                         self.d.click(960, 1040) 
                         sent = True
                     
                     print(f"{GREEN}    -> Commentaire envoyé !{RESET}")
                     await asyncio.sleep(2)
-                    
-                    # Fermer le tiroir (Clic en haut de l'écran pour revenir à la vidéo)
-                    os.system(f"{self.adb} input tap 500 200")
-
+                    os.system(f"{self.adb} input tap 500 200") # Fermer clavier/tiroir
                 else:
                     print(f"{RED}    ❌ Champ texte introuvable !{RESET}")
 
-            # ---------------------------------------------------------
-            # --- CAS FOLLOW ---
+            # --- FOLLOW ---
             if "follow" in action_lower or "profile" in action_lower:
-                print(f"{CYAN}   👤 Recherche bouton Follow (Smart)...{RESET}", flush=True)
-                
-                # On construit une requête XPATH ou une boucle pour vérifier les textes
-                # C'est plus rapide de vérifier l'existence via une boucle locale
+                print(f"{CYAN}    👤 Recherche bouton Follow...{RESET}", flush=True)
                 clicked = False
                 for keyword in FOLLOW_KEYWORDS:
-                    # On cherche un élément qui contient le texte ET qui est cliquable
                     if self.d(textContains=keyword).exists:
                         self.d(textContains=keyword).click()
-                        print(f"{GREEN}   -> Clic sur '{keyword}'{RESET}")
+                        print(f"{GREEN}    -> Clic sur '{keyword}'{RESET}")
                         clicked = True
                         break
                 
                 if not clicked:
-                    # TENTATIVE AVANCÉE : Chercher par Resource ID commun si le texte échoue
-                    # Souvent le bouton follow est un bouton rouge spécifique
-                    # Note: ceci est un exemple, l'ID change selon les versions de l'app
                     if self.d(resourceIdMatches=".*follow_btn.*").exists:
                          self.d(resourceIdMatches=".*follow_btn.*").click()
-                         print(f"{GREEN}   -> Clic sur Follow (via ID){RESET}")
+                         print(f"{GREEN}    -> Clic sur Follow (via ID){RESET}")
                     else:
-                        print(f"{RED}   ❌ Bouton Follow introuvable (Textes/ID testés){RESET}")
-                        # Fallback ADB manuel si vraiment nécessaire
-                        # os.system(f"{self.adb} input tap 240 800")
+                        print(f"{RED}    ❌ Bouton Follow introuvable{RESET}")
             
-            # --- CAS LIKE ---
+            # --- LIKE ---
             else:
-                print(f"{CYAN}   ❤️  Mode Like (Smart Logic)...{RESET}", flush=True)
-            
-                # 1. PAUSE (Recommandé pour stabiliser l'UI)
-                # Clic central simple
+                print(f"{CYAN}    ❤️  Mode Like...{RESET}", flush=True)
                 self.d.click(0.5, 0.5) 
                 await asyncio.sleep(0.5)
             
-                # 2. LOGIQUE DE DÉTECTION DU CŒUR
                 liked_success = False
-            
-                # MÉTHODE A : Par Description (Accessibilité) avec Regex
-                # Cela couvre "Like video", "J'aime la vidéo", "Double tap to like"
                 if self.d(descriptionMatches=LIKE_DESC_REGEX).exists:
-                    print(f"{GREEN}   -> Détection via Description (Accessibilité){RESET}")
                     self.d(descriptionMatches=LIKE_DESC_REGEX).click()
                     liked_success = True
-            
-                # MÉTHODE B : Par Position (Hierarchie XML) - TRÈS ROBUSTE
-                # Si la description échoue, on sait que le bouton Like est généralement 
-                # dans un LinearLayout à droite. C'est souvent une ImageView.
-                # On cherche l'élément qui a la même classe que les autres icônes
                 elif not liked_success:
-                    print(f"{YELLOW}   ⚠️ Description absente, analyse de la structure...{RESET}")
-                    
-                    # Sur TikTok, les icônes de droite sont souvent des ImageView clickable
-                    # Le Like est souvent le 2ème ou 3ème élément clickable en partant du haut (Profil > Like > Coms)
-                    # Ceci est un exemple de logique puissante :
-                    try:
-                        # On cherche toutes les ImageViews clickables sur la moitié droite de l'écran
-                        buttons = self.d(className="android.widget.ImageView", clickable=True)
-                        
-                        for btn in buttons:
-                            info = btn.info
-                            bounds = info['bounds']
-                            center_x = (bounds['left'] + bounds['right']) / 2
-                            center_y = (bounds['top'] + bounds['bottom']) / 2
-                            
-                            # Le bouton Like est à Droite (> 80% largeur) et au Milieu-Haut (~40-50% hauteur)
-                            screen_w, screen_h = self.d.window_size()
-                            
-                            if (center_x > screen_w * 0.80) and (screen_h * 0.35 < center_y < screen_h * 0.55):
-                                print(f"{GREEN}   -> Bouton détecté par coordonnées géométriques !{RESET}")
-                                btn.click()
-                                liked_success = True
-                                break
-                    except Exception as e:
-                        print(f"Erreur logique structurelle: {e}")
-            
-                # MÉTHODE C : L'ARME ABSOLUE (Double Tap)
-                # Si on n'arrive pas à cliquer sur le bouton spécifique, on double-tap la vidéo.
-                if not liked_success:
-                    print(f"{MAGENTA}   🚀 Fallback Ultime : DOUBLE TAP vidéo{RESET}")
-                    # Double clic au centre de l'écran (0.5, 0.5)
+                    # Fallback Double Tap
+                    print(f"{MAGENTA}    🚀 Fallback : DOUBLE TAP{RESET}")
                     self.d.double_click(0.5, 0.5, duration=0.1) 
                     liked_success = True
-            
-                if liked_success:
-                    print(f"{DIM}   -> Like effectué.{RESET}")
-                   
 
             await asyncio.sleep(3)
             os.system(f"{self.adb} am force-stop {CLONE_CONTAINER_PACKAGE}")
@@ -320,31 +228,73 @@ class TikTokTaskBot:
     # ---------- TELEGRAM ----------
     async def start_telegram(self):
         if not self.detect_device():
-            print(f"{RED}❌ ADB non détecté. Vérifie ta connexion USB/Wifi.{RESET}", flush=True)
-            input("Appuie sur Entrée pour revenir au menu...")
+            print(f"{RED}❌ ADB non détecté.{RESET}", flush=True)
+            input("Appuie sur Entrée...")
             return
         
         await self.client.start()
-        # --- CORRECTION ICI ---
         self.client.remove_event_handler(self.on_message)
         self.client.add_event_handler(self.on_message, events.NewMessage(chats=TARGET_BOT))
-        # ----------------------
         
         if not self.accounts:
-            print(f"{RED}⚠️ Aucun compte configuré !{RESET}", flush=True)
+            print(f"{RED}⚠️ Aucun compte configuré !{RESET}")
             return
-        if self.accounts[self.index] in self.paused_accounts:
-            print(f"{YELLOW}Le compte actuel est en pause, recherche du suivant...{RESET}")
-            self.get_next_active_index()
 
         current_acc = self.accounts[self.index]
-        print(f"\n{BOLD}{WHITE}🚀 Démarrage sur le compte : {CYAN}{current_acc}{RESET}", flush=True)
-        await self.client.send_message(TARGET_BOT, "TikTok")
+        print(f"\n{BOLD}{WHITE}🚀 Démarrage sur : {CYAN}{current_acc}{RESET}", flush=True)
+        
+        # Utilisation de la méthode helper pour mémoriser
+        await self.send_bot_command("TikTok") 
         await self.client.run_until_disconnected()
 
     async def on_message(self, event):
         text = event.message.message or ""
         buttons = event.message.buttons
+
+        # =========================================================================
+        # 🛡️ GESTION DU SECURITY CHECK (NOUVEAU CODE)
+        # =========================================================================
+        if "Security check" in text and "verification" in text:
+            print(f"\n{RED}{BOLD}🛡️ SECURITY CHECK DETECTÉ !{RESET}")
+            
+            # 1. Extraction du lien
+            url_match = re.search(r'(https?://smmkingdom\.com/tasker/captcha-test/\S+)', text)
+            
+            if url_match:
+                link = url_match.group(1)
+                # Nettoyage si le lien capture la parenthèse fermante
+                link = link.rstrip(')')
+                
+                print(f"{WHITE}🔗 Lien Captcha : {CYAN}{link}{RESET}")
+                
+                # 2. Ouverture Chrome via ADB
+                print(f"{YELLOW}🌍 Ouverture Chrome...{RESET}")
+                # On utilise l'Activity spécifique de Chrome pour être sûr
+                cmd_open = f'{self.adb} am start -n {CHROME_ACTIVITY} -d "{link}" > /dev/null 2>&1'
+                os.system(cmd_open)
+                
+                # 3. Attente 15s
+                print(f"{YELLOW}⏱️  Attente 15 secondes pour validation...{RESET}")
+                await asyncio.sleep(15)
+                
+                # 4. Fermeture Chrome
+                print(f"{YELLOW}🔒 Fermeture Chrome...{RESET}")
+                os.system(f'{self.adb} am force-stop {CHROME_PKG_NAME} > /dev/null 2>&1')
+                self.focus_termux()
+                
+                # 5. Renvoyer la dernière commande
+                print(f"{GREEN}✅ Vérification terminée (théoriquement).{RESET}")
+                print(f"{CYAN}🔄 Renvoi de la dernière commande : {BOLD}{self.last_sent_msg}{RESET}")
+                
+                # On renvoie ce qu'on avait stocké
+                await self.send_bot_command(self.last_sent_msg)
+                return
+            else:
+                print(f"{RED}❌ Impossible d'extraire le lien du Security Check.{RESET}")
+                # Dans le doute, on renvoie TikTok pour relancer
+                await self.send_bot_command("TikTok")
+                return
+        # =========================================================================
 
         # --- 1. DETECTION DE TÂCHE ---
         if "Link :" in text and "Action :" in text:
@@ -360,121 +310,77 @@ class TikTokTaskBot:
 
             if full_link:
                 action = re.search(r"Action\s*:\s*(.+)", text).group(1)
-                
                 print(f"\n{DIM}━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━{RESET}", flush=True)
                 print(f"{WHITE}🔗 Task: {BOLD}{action}{RESET}", flush=True)
                 
-                # --- CAS COMMENTAIRE ---
+                # --- COMMENTAIRE ---
                 if "comment" in action.lower():
-                    print(f"{MAGENTA}💬 Commentaire détecté : Récupération du texte...{RESET}", flush=True)
-                    
-                    # 1. ASTUCE : On attend que le 2ème message arrive
                     await asyncio.sleep(0.5) 
-                    
-                    # 2. On récupère le tout dernier message du bot
-                    # (Ce sera le texte à copier)
                     history = await self.client.get_messages(TARGET_BOT, limit=1)
                     comment_text = history[0].message if history else None
-
-                    # Petite sécurité : si le dernier message contient encore "Link :", c'est qu'on a raté le texte
                     if comment_text and "Link :" in comment_text:
-                        comment_text = "Wow amazing video 🔥" # Fallback par défaut
-
-                    print(f"{MAGENTA}   📝 Texte à copier : {BOLD}{comment_text}{RESET}", flush=True)
-
-                    # 3. On lance la tâche en passant le texte
-                    print(f"{YELLOW}⏳ Exécution en cours...{RESET}", flush=True)
+                        comment_text = "Wow amazing video 🔥"
+                    
                     success = await self.do_task(self.index + 1, full_link, action, specific_text=comment_text)
 
-                    # 4. GESTION DU GAIN (Identique au Like/Follow mais adapté)
                     if success:
-                         # --- CALCUL GAIN COMMENTAIRE ---
-                        local_gain = 2.0 # Modifie cette valeur selon le gain réel du bot
-                        action_name = "💬 COMMENT"
-
-                        # Mise à jour stats
-                        old_balance = self.stats["earned"]
-                        new_balance = old_balance + local_gain
-                        self.stats["earned"] = new_balance
+                        local_gain = 2.0
+                        self.stats["earned"] += local_gain
                         self.stats["tasks"] += 1
                         self.save_json("stats.json", self.stats)
+                        print(f"{GREEN}✅ COMMENT TERMINE (+{local_gain}){RESET}")
 
-                        print(f"{GREEN}✅ {action_name} TERMINE{RESET}", flush=True)
-                        print(f"{MAGENTA}💰 SOLDE: {old_balance:.1f} + {local_gain:.1f} = {BOLD}{new_balance:.1f} CC{RESET}", flush=True)
-                        
-                        # Validation
-                        print(f"{CYAN}➡️  Validation Task...{RESET}", flush=True)
                         if buttons:
                             for i, row in enumerate(buttons):
                                 for j, btn in enumerate(row):
                                     if "Completed" in btn.text or "✅" in btn.text:
+                                        # On ne change pas self.last_sent_msg ici car c'est un click
+                                        # Mais logiquement on veut souvent redemander une tache après
                                         await event.message.click(i, j)
                                         return
 
-                # --- CAS LIKE / FOLLOW ---
+                # --- LIKE / FOLLOW ---
                 else:
-                    print(f"{YELLOW}⏳ Exécution en cours sur le téléphone...{RESET}", flush=True)
-                    
                     success = await self.do_task(self.index + 1, full_link, action)
                     
                     if success:
-                        # 1. DETERMINER LE GAIN LOCALEMENT
-                        local_gain = 0.0
-                        if "follow" in action.lower() or "profile" in action.lower():
-                            local_gain = GAIN_FOLLOW
-                            action_name = "👤 FOLLOW"
-                        else:
-                            local_gain = GAIN_LIKE
-                            action_name = "❤️ LIKE"
-
-                        # 2. MISE A JOUR DES STATS
-                        old_balance = self.stats["earned"]
-                        new_balance = old_balance + local_gain
-                        self.stats["earned"] = new_balance
+                        local_gain = GAIN_FOLLOW if ("follow" in action.lower() or "profile" in action.lower()) else GAIN_LIKE
+                        self.stats["earned"] += local_gain
                         self.stats["tasks"] += 1
                         self.save_json("stats.json", self.stats)
 
-                        # 3. AFFICHAGE DU COMPTAGE
-                        print(f"{GREEN}✅ {action_name} TERMINE{RESET}", flush=True)
-                        print(
-                            f"{MAGENTA}💰 SOLDE: {old_balance:.1f} + "
-                            f"{local_gain:.1f} = {BOLD}{new_balance:.1f} CC{RESET}",
-                            flush=True
-                        )
-
-                        # 4. ENVOI DU BOUTON COMPLETE
+                        print(f"{GREEN}✅ TASK TERMINE (+{local_gain}){RESET}")
                         print(f"{CYAN}➡️  Validation Task...{RESET}", flush=True)
                         
                         if buttons:
                             for i, row in enumerate(buttons):
                                 for j, btn in enumerate(row):
                                     if "Completed" in btn.text or "✅" in btn.text:
+                                        # Clic sur Completed
                                         await event.message.click(i, j)
+                                        # NOTE : Si un captcha arrive juste après ce clic, 
+                                        # renvoyer "TikTok" est souvent la meilleure façon de reprendre
                                         return
 
-        # --- 2. GESTION SUIVANTE (On ignore "added" pour le comptage) ---
+        # --- 2. GESTION SUIVANTE ---
         elif "added" in text.lower() or "credited" in text.lower():
-            # Juste pour le délai humain, on n'ajoute rien ici car déjà fait
             await asyncio.sleep(2)
-            await self.client.send_message(TARGET_BOT, "TikTok")
+            await self.send_bot_command("TikTok")
 
         # --- 3. PAS DE TASK ---
         elif "Sorry" in text or "No more" in text:
             print(f"{RED}🚫 Pas de task sur ce compte.{RESET}", flush=True)
-            
             self.get_next_active_index()
-
             next_acc = self.accounts[self.index]
             
-            # Vérification de sécurité si tout est en pause
             if next_acc in self.paused_accounts:
-                print(f"{RED}Tous les comptes sont en pause. Arrêt temporaire.{RESET}")
+                print(f"{RED}Tous les comptes sont en pause.{RESET}")
                 await self.client.disconnect()
                 return
 
             await asyncio.sleep(2)
             print(f"\n{WHITE}🔍 Switch vers : {CYAN}{next_acc}{RESET}", flush=True)
-            await self.client.send_message(TARGET_BOT, "TikTok")
+            await self.send_bot_command("TikTok")
 
         # --- 4. GESTION BOUTONS COMPTE ---
         elif buttons and "Link" not in text:
@@ -487,27 +393,22 @@ class TikTokTaskBot:
                         clicked = True
                         return
             if not clicked and "Select account" in text:
-                 print(f"{RED}Compte {target} introuvable dans le menu bot.{RESET}", flush=True)
+                 print(f"{RED}Compte {target} introuvable.{RESET}", flush=True)
         
         # --- 5. COMPTE A RÉPARER ---
         elif "too" in text or "warnings" in text:
             if text and len(text.strip()) > 0:
-                print(f"{YELLOW}⚠️ Ce compte a besoin d'être réparé : {text}{RESET}", flush=True)
+                print(f"{YELLOW}⚠️ Compte à réparer : {text}{RESET}", flush=True)
                 self.get_next_active_index()
-
                 next_acc = self.accounts[self.index]
-                
-                # Vérification de sécurité si tout est en pause
                 if next_acc in self.paused_accounts:
-                    print(f"{RED}Tous les comptes sont en pause. Arrêt temporaire.{RESET}")
                     await self.client.disconnect()
                     return
-    
                 await asyncio.sleep(2)
                 print(f"\n{WHITE}🔍 Switch vers : {CYAN}{next_acc}{RESET}", flush=True)
-                await self.client.send_message(TARGET_BOT, "TikTok")
+                await self.send_bot_command("TikTok")
 
-    # ---------- MENU PRINCIPAL ----------
+    # ---------- MENU PRINCIPAL (Inchangé sauf appel clear) ----------
     async def menu(self):
         while True:
             clear_screen()
@@ -521,13 +422,13 @@ class TikTokTaskBot:
 ██╔████╔██║██║██║     ███████║
 ██║╚██╔╝██║██║██║     ██╔══██║
 ██║ ╚═╝ ██║██║╚██████╗██║  ██║
-╚═╝     ╚═╝╚═╝ ╚═════╝╚═╝  ╚═╝{RESET}
+╚═╝      ╚═╝╚═╝ ╚═════╝╚═╝  ╚═╝{RESET}
 {DIM}━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━{RESET}
-{WHITE}🤖 BOT AUTOMATION V3.3.3 {DIM}|{RESET} {CYAN}BY MICH{RESET}
+{WHITE}🤖 BOT AUTOMATION V3.4 (Security Fix) {DIM}|{RESET} {CYAN}BY MICH{RESET}
 {DIM}━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━{RESET}
  📱 Status ADB    : {adb_status}
- 👥 Comptes        : {WHITE}{acc_count}{RESET}
- 💰 Total Gagné    : {YELLOW}{total_earned:.1f} CashCoins{RESET}
+ 👥 Comptes         : {WHITE}{acc_count}{RESET}
+ 💰 Total Gagné     : {YELLOW}{total_earned:.1f} CC{RESET}
 {DIM}━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━{RESET}
  {WHITE}[1]{RESET} ▶️  LANCER LE FARMING
  {WHITE}[2]{RESET} ➕  AJOUTER UN COMPTE
@@ -536,93 +437,65 @@ class TikTokTaskBot:
  {WHITE}[5]{RESET} ☁️  MISE À JOUR
  {WHITE}[6]{RESET} ❌  QUITTER
 {DIM}━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━{RESET}
-""", flush=True)
+""")
             choice = input(f"{BOLD}{BLUE}➜ CHOIX : {RESET}")
 
             if choice == "1":
                 if self.accounts: 
-                    # --- DEBUT MODIFICATION ---
-                    self.stats["earned"] = 0.0   # Remet les gains à 0
-                    self.stats["tasks"] = 0      # (Optionnel) Remet aussi le compteur de tâches à 0
-                    self.save_json("stats.json", self.stats) # Sauvegarde la remise à zéro
+                    self.stats["earned"] = 0.0   
+                    self.stats["tasks"] = 0       
+                    self.save_json("stats.json", self.stats)
                     print(f"{GREEN}💰 Compteur remis à 0 pour cette session.{RESET}")
                     await asyncio.sleep(1)
-                    # --- FIN MODIFICATION ---
-                    
                     await self.start_telegram()
                 else:
-                    input(f"{RED}Ajoute au moins un compte d'abord ! [Entrée]{RESET}")
+                    input(f"{RED}Ajoute un compte d'abord ! [Entrée]{RESET}")
 
             elif choice == "2":
                 while True:
                     clear_screen()
-                    print(f"{CYAN}=== ➕ AJOUT DE COMPTE ==={RESET}", flush=True)
-                    print(f"{DIM}Entrée vide pour retour.{RESET}\n", flush=True)
-                    
+                    print(f"{CYAN}=== ➕ AJOUT DE COMPTE ==={RESET}")
                     name = input(f"Nom du compte n°{len(self.accounts)+1} : ")
                     if not name.strip(): break
-                    
-                    if name in self.accounts:
-                        print(f"{RED}Ce compte existe déjà !{RESET}", flush=True)
-                        await asyncio.sleep(1)
-                    else:
+                    if name not in self.accounts:
                         self.accounts.append(name)
                         self.save_json("accounts.json", self.accounts)
-                        print(f"{GREEN}✅ Compte ajouté.{RESET}", flush=True)
+                        print(f"{GREEN}✅ Compte ajouté.{RESET}")
                         await asyncio.sleep(0.5)
 
             elif choice == "3":
                 while True: 
                     clear_screen()
-                    print(f"{CYAN}=== 📋 GESTION DES COMPTES ==={RESET}", flush=True)
-                    
-                    # Affichage avec statut
+                    print(f"{CYAN}=== 📋 GESTION ==={RESET}")
                     for i, acc in enumerate(self.accounts, 1):
                         status = f"{RED}[PAUSE]{RESET}" if acc in self.paused_accounts else f"{GREEN}[ACTIF]{RESET}"
-                        print(f"{CYAN}{i}.{RESET} {acc} {status}", flush=True)
-                    
-                    print(f"\n{YELLOW}[P]{RESET} Pause/Reprendre | {RED}[S]{RESET} Supprimer | {WHITE}[Entrée]{RESET} Retour", flush=True)
+                        print(f"{CYAN}{i}.{RESET} {acc} {status}")
+                    print(f"\n{YELLOW}[P]{RESET} Pause/Reprendre | {RED}[S]{RESET} Supprimer | {WHITE}[Entrée]{RESET} Retour")
                     cmd = input("➜ ").lower()
-
                     if cmd == 'p':
                         try:
-                            idx = int(input("Numéro du compte à modifier : ")) - 1
-                            if 0 <= idx < len(self.accounts):
-                                target = self.accounts[idx]
-                                if target in self.paused_accounts:
-                                    self.paused_accounts.remove(target) # On retire de la pause
-                                else:
-                                    self.paused_accounts.append(target) # On ajoute en pause
-                                
-                                self.save_json("paused.json", self.paused_accounts)
+                            idx = int(input("Numéro : ")) - 1
+                            target = self.accounts[idx]
+                            if target in self.paused_accounts: self.paused_accounts.remove(target)
+                            else: self.paused_accounts.append(target)
+                            self.save_json("paused.json", self.paused_accounts)
                         except: pass
-                    
                     elif cmd == 's':
                         try:
-                            idx = int(input("Numéro à supprimer : ")) - 1
-                            if 0 <= idx < len(self.accounts):
-                                removed = self.accounts.pop(idx)
-                                # Nettoyage si le compte était en pause
-                                if removed in self.paused_accounts:
-                                    self.paused_accounts.remove(removed)
-                                    self.save_json("paused.json", self.paused_accounts)
-                                self.save_json("accounts.json", self.accounts)
+                            idx = int(input("Numéro : ")) - 1
+                            rem = self.accounts.pop(idx)
+                            if rem in self.paused_accounts: self.paused_accounts.remove(rem)
+                            self.save_json("accounts.json", self.accounts)
                         except: pass
-                    
-                    else:
-                        break # Sortir du menu gestion
+                    else: break
 
-            elif choice == "4":
-                self.detect_device()
-            elif choice == "5":
-                self.update_script()
-            elif choice == "6":
-                print(f"{CYAN}Bye !{RESET}", flush=True)
-                break
+            elif choice == "4": self.detect_device()
+            elif choice == "5": self.update_script()
+            elif choice == "6": break
 
 if __name__ == "__main__":
     bot = TikTokTaskBot()
     try:
         asyncio.run(bot.menu())
     except KeyboardInterrupt:
-        print("\nArrêt forcé.", flush=True)
+        print("\nArrêt forcé.")
