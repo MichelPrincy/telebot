@@ -9,6 +9,12 @@ import uiautomator2 as u2
 from dotenv import load_dotenv
 from telethon import TelegramClient, events
 from telethon.tl.types import MessageEntityTextUrl
+from supabase import create_client, Client # Import Supabase
+
+# ================== CONFIGURATION SUPABASE ==================
+# REMPLACE CECI PAR TES INFOS SUPABASE
+SUPABASE_URL = "https://kxgowljjsnlcdijcntzv.supabase.co" 
+SUPABASE_KEY = "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6Imt4Z293bGpqc25sY2RpamNudHp2Iiwicm9sZSI6ImFub24iLCJpYXQiOjE3NzAyNzExMjQsImV4cCI6MjA4NTg0NzEyNH0.6DQsDuqMV_1_ZAXLdEZCs9qUVjEzvSz2p6ucoNoqxNs" 
 
 # ================== COULEURS & STYLES ==================
 RED = "\033[91m"
@@ -23,9 +29,8 @@ DIM = "\033[2m"
 RESET = "\033[0m"
 
 # ================== PACKAGES ==================
- = "com.waxmoon.ma.gp"
+CLONE_CONTAINER_PACKAGE = "com.waxmoon.ma.gp"
 TERMUX_PACKAGE = "com.termux/com.termux.app.TermuxActivity"
-# Correction: Nom du package seul pour le force-stop, et ComponentName pour le start
 CHROME_PKG_NAME = "com.android.chrome"
 CHROME_ACTIVITY = "com.android.chrome/com.google.android.apps.chrome.Main"
 
@@ -60,8 +65,12 @@ class TikTokTaskBot:
         self.adb = "adb shell"
         self.client = TelegramClient("session_bot", API_ID, API_HASH)
         self.d = None 
-        # NOUVEAU : Variable pour mémoriser la dernière commande envoyée
         self.last_sent_msg = "TikTok" 
+        
+        # --- SUPABASE INIT ---
+        self.supabase: Client = create_client(SUPABASE_URL, SUPABASE_KEY)
+        self.user_session_file = "user_session.json"
+        self.current_user = None # Stockera les infos de l'utilisateur connecté
 
     def load_json(self, file, default):
         if os.path.exists(file):
@@ -75,6 +84,115 @@ class TikTokTaskBot:
         with open(file, "w") as f:
             json.dump(data, f, indent=4)
 
+    # ================== GESTION UTILISATEUR (SUPABASE) ==================
+    def authenticate_user(self):
+        """Gère la connexion, la vérification et le stockage local"""
+        clear_screen()
+        print(f"{CYAN}🔒 AUTHENTIFICATION UTILISATEUR{RESET}")
+        
+        nom = ""
+        password = ""
+        
+        # 1. Vérifier si une session existe déjà
+        if os.path.exists(self.user_session_file):
+            print(f"{YELLOW}📂 Session locale détectée...{RESET}")
+            session_data = self.load_json(self.user_session_file, {})
+            nom = session_data.get("nom")
+            password = session_data.get("pass")
+        
+        # 2. Si pas de session, demander les infos
+        if not nom or not password:
+            print(f"{WHITE}Veuillez vous connecter (Infos Database){RESET}")
+            nom = input(f"{BOLD}Nom d'utilisateur : {RESET}")
+            password = input(f"{BOLD}Mot de passe      : {RESET}")
+
+        print(f"{YELLOW}🌐 Vérification auprès du serveur...{RESET}")
+
+        try:
+            # Requête Supabase : SELECT * FROM userbot WHERE nom = nom AND pass = pass
+            response = self.supabase.table("userbot").select("*").eq("nom", nom).eq("pass", password).execute()
+            
+            if response.data and len(response.data) > 0:
+                self.current_user = response.data[0]
+                print(f"{GREEN}✅ Connexion réussie ! Bienvenue {self.current_user['nom']}.{RESET}")
+                
+                # Sauvegarde locale pour la prochaine fois
+                self.save_json(self.user_session_file, {"nom": nom, "pass": password})
+                
+                # Vérification initiale des limites
+                self.check_limits_strict()
+                
+                time.sleep(2)
+                return True
+            else:
+                print(f"{RED}❌ Identifiants incorrects ou compte inexistant.{RESET}")
+                # Si le fichier existait mais est invalide, on le supprime
+                if os.path.exists(self.user_session_file):
+                    os.remove(self.user_session_file)
+                input("Appuyez sur Entrée pour réessayer...")
+                return self.authenticate_user() # Récursion
+
+        except Exception as e:
+            print(f"{RED}❌ Erreur de connexion Database : {e}{RESET}")
+            exit()
+
+    def check_limits_strict(self):
+        """Vérifie si cashnow >= max. Si oui, bloque tout."""
+        if not self.current_user: return
+
+        cashnow = float(self.current_user['cashnow'])
+        maximum = float(self.current_user['max'])
+
+        if cashnow >= maximum:
+            clear_screen()
+            print(f"""
+{RED}██████╗ ██╗      ██████╗  ██████╗██╗  ██╗
+██╔══██╗██║     ██╔═══██╗██╔════╝██║ ██╔╝
+██████╔╝██║     ██║   ██║██║     █████╔╝ 
+██╔══██╗██║     ██║   ██║██║     ██╔═██╗ 
+██████╔╝███████╗╚██████╔╝╚██████╗██║  ██╗
+╚═════╝ ╚══════╝ ╚═════╝  ╚═════╝╚═╝  ╚═╝{RESET}
+{DIM}━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━{RESET}
+{YELLOW}⚠️  LIMITE ATTEINTE ({cashnow}/{maximum} CC){RESET}
+{DIM}━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━{RESET}
+Votre accès a été restreint car vous avez atteint
+votre limite de CashCoin.
+
+{WHITE}📞 Pour débloquer, contactez l'admin :{RESET}
+
+👤 {CYAN}Michel Princy{RESET}
+🌐 {BLUE}https://www.facebook.com/michel.princy2709/{RESET}
+📱 {GREEN}+261 38 299 46 93{RESET} (WhatsApp/Telegram)
+{DIM}━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━{RESET}
+""")
+            input(f"{RED}[Appuyez sur Entrée pour fermer]{RESET}")
+            exit()
+
+    def update_cashcoin(self, amount):
+        """Ajoute le gain à la DB et vérifie la limite"""
+        try:
+            # 1. Récupérer les données fraîches pour éviter les conflits
+            user_id = self.current_user['id']
+            refresh = self.supabase.table("userbot").select("*").eq("id", user_id).execute()
+            
+            if refresh.data:
+                self.current_user = refresh.data[0]
+                current_cash = float(self.current_user['cashnow'])
+                new_cash = current_cash + amount
+                
+                # 2. Mise à jour Supabase
+                self.supabase.table("userbot").update({"cashnow": new_cash}).eq("id", user_id).execute()
+                print(f"{MAGENTA}💾 DB Updated: {current_cash:.2f} -> {new_cash:.2f} CC{RESET}")
+                
+                # 3. Mettre à jour l'objet local et vérifier la limite
+                self.current_user['cashnow'] = new_cash
+                self.check_limits_strict()
+                
+        except Exception as e:
+            print(f"{RED}⚠️ Erreur mise à jour DB : {e}{RESET}")
+
+    # ================== FIN GESTION UTILISATEUR ==================
+
     def get_next_active_index(self):
         start_index = self.index
         for _ in range(len(self.accounts)):
@@ -85,13 +203,10 @@ class TikTokTaskBot:
         print(f"{RED}⚠️ ATTENTION : Tous les comptes sont en pause !{RESET}")
         return start_index 
 
-    # ---------- HELPER POUR ENVOYER ET MÉMORISER ----------
     async def send_bot_command(self, message):
-        """Envoie un message et le mémorise pour le renvoi après Security Check"""
         self.last_sent_msg = message
         await self.client.send_message(TARGET_BOT, message)
 
-    # ---------- MISE À JOUR ----------
     def update_script(self):
         print(f"{CYAN}🌐 Vérification mise à jour...{RESET}", flush=True)
         url = "https://raw.githubusercontent.com/MichelPrincy/telebot/main/main.py"
@@ -103,7 +218,6 @@ class TikTokTaskBot:
                 print(f"{GREEN}✅ Mise à jour installée.{RESET}", flush=True)
                 exit()
         except Exception: pass
-
 
     # ---------- ADB & UIAUTOMATOR ----------
     def detect_device(self):
@@ -119,7 +233,6 @@ class TikTokTaskBot:
             
             if found:
                 try:
-                    # On ne spam pas le log connexion si déjà connecté
                     if self.d is None:
                         print(f"{YELLOW}🔌 Connexion uiautomator2...{RESET}")
                         self.d = u2.connect(self.device_id)
@@ -182,7 +295,6 @@ class TikTokTaskBot:
                     sent = False
                     send_btn = self.d(resourceIdMatches="(?i).*id/(send_btn|publish_button|comment_publish_img)")
                     if send_btn.exists:
-                        # self.d.click(960, 1040) # Parfois le click direct element est mieux
                         send_btn.click()
                         sent = True
                     
@@ -192,7 +304,7 @@ class TikTokTaskBot:
                     
                     print(f"{GREEN}    -> Commentaire envoyé !{RESET}")
                     await asyncio.sleep(2)
-                    os.system(f"{self.adb} input tap 500 200") # Fermer clavier/tiroir
+                    os.system(f"{self.adb} input tap 500 200") 
                 else:
                     print(f"{RED}    ❌ Champ texte introuvable !{RESET}")
 
@@ -225,13 +337,12 @@ class TikTokTaskBot:
                     self.d(descriptionMatches=LIKE_DESC_REGEX).click()
                     liked_success = True
                 elif not liked_success:
-                    # Fallback Double Tap
                     print(f"{MAGENTA}    🚀 Fallback : DOUBLE TAP{RESET}")
                     self.d.double_click(0.5, 0.5, duration=0.1) 
                     liked_success = True
 
             await asyncio.sleep(3)
-            os.system(f"{self.adb} am force-stop {}")
+            os.system(f"{self.adb} am force-stop {CLONE_CONTAINER_PACKAGE}")
             self.focus_termux()
             return True
 
@@ -241,6 +352,9 @@ class TikTokTaskBot:
 
     # ---------- TELEGRAM ----------
     async def start_telegram(self):
+        # Vérification DB avant de démarrer le bot
+        self.check_limits_strict()
+
         if not self.detect_device():
             print(f"{RED}❌ ADB non détecté.{RESET}", flush=True)
             input("Appuie sur Entrée...")
@@ -257,7 +371,6 @@ class TikTokTaskBot:
         current_acc = self.accounts[self.index]
         print(f"\n{BOLD}{WHITE}🚀 Démarrage sur : {CYAN}{current_acc}{RESET}", flush=True)
         
-        # Utilisation de la méthode helper pour mémoriser
         await self.send_bot_command("TikTok") 
         await self.client.run_until_disconnected()
 
@@ -266,24 +379,19 @@ class TikTokTaskBot:
         buttons = event.message.buttons
 
         # =========================================================================
-        # 🛡️ GESTION DU SECURITY CHECK (CORRIGÉ & COMPLET)
+        # 🛡️ GESTION DU SECURITY CHECK 
         # =========================================================================
         if "Security check" in text and "verification" in text:
             print(f"\n{RED}{BOLD}🛡️ SECURITY CHECK DETECTÉ !{RESET}")
-            
-            # --- 1. Extraction du lien (Méthode Robuste comme dans les Tasks) ---
             full_link = None
             
-            # A. On cherche d'abord dans les entités (Hyperliens cachés)
             if event.message.entities:
                 for entity in event.message.entities:
                     if isinstance(entity, MessageEntityTextUrl):
-                        # On vérifie si c'est bien le lien smmkingdom
                         if "smmkingdom.com" in entity.url:
                             full_link = entity.url
                             break
             
-            # B. Si pas trouvé dans les entités, on tente le Regex sur le texte brut
             if not full_link:
                 url_match = re.search(r'(https?://smmkingdom\.com/tasker/captcha-test/\S+)', text)
                 if url_match:
@@ -291,25 +399,16 @@ class TikTokTaskBot:
 
             if full_link:
                 print(f"{WHITE}🔗 Lien Captcha Trouvé : {CYAN}{full_link}{RESET}")
-                
-                # --- 2. Ouverture Chrome via ADB ---
                 print(f"{YELLOW}🌍 Ouverture Chrome...{RESET}")
                 cmd_open = f'{self.adb} am start -n {CHROME_ACTIVITY} -d "{full_link}" > /dev/null 2>&1'
                 os.system(cmd_open)
                 
-                # --- 3. Attente 15s (Chargement page) ---
-                print(f"{YELLOW}⏱️  Attente 15 secondes pour chargement...{RESET}")
+                print(f"{YELLOW}⏱️  Attente 25 secondes pour chargement...{RESET}")
                 await asyncio.sleep(25)
                 
-                # --- 4. Clic sur le bouton "Continuer" via UIAutomator2 ---
                 print(f"{YELLOW}point_up  Tentative de clic sur le bouton de vérification...{RESET}")
                 try:
-                    # Connexion à l'appareil (peut être déplacé dans __init__ pour gagner du temps)
-                    # Si tu utilises un ID d'appareil spécifique, mets-le dans connect('ID')
                     d = u2.connect() 
-                    
-                    # On cherche un bouton qui contient "Click here" ou "Verify" ou "Continue"
-                    # Adapte le texte selon ce qui est écrit sur le bouton du site
                     if d(textContains="Continue").exists(timeout=5):
                         d(textContains="Continue").click()
                         print(f"{GREEN}✅ Clic effectué sur 'Click here'{RESET}")
@@ -317,35 +416,27 @@ class TikTokTaskBot:
                         d(textContains="Verify").click()
                         print(f"{GREEN}✅ Clic effectué sur 'Verify'{RESET}")
                     elif d(className="android.widget.Button").exists(timeout=2):
-                        # Fallback : Clique sur le premier bouton trouvé si pas de texte
                         d(className="android.widget.Button").click()
                         print(f"{GREEN}✅ Clic effectué sur un bouton générique{RESET}")
                     else:
-                        print(f"{RED}⚠️ Aucun bouton détecté, tentative manuelle ou page déjà validée.{RESET}")
-                    
-                    # Petite pause pour laisser le site valider le clic
+                        print(f"{RED}⚠️ Aucun bouton détecté.{RESET}")
                     await asyncio.sleep(5)
-                    
                 except Exception as e:
                     print(f"{RED}❌ Erreur uiautomator2 : {e}{RESET}")
 
-                # --- 5. Fermeture Chrome ---
                 print(f"{YELLOW}🔒 Fermeture Chrome...{RESET}")
                 os.system(f'{self.adb} am force-stop {CHROME_PKG_NAME} > /dev/null 2>&1')
                 os.system(f"{self.adb} am kill-all > /dev/null 2>&1")
                 self.focus_termux()
                 
-                # --- 6. Renvoyer la dernière commande ---
                 print(f"{GREEN}✅ Vérification terminée.{RESET}")
                 print(f"{CYAN}🔄 Renvoi de la dernière commande : {BOLD}{self.last_sent_msg}{RESET}")
-                
                 await self.send_bot_command(self.last_sent_msg)
                 return
             else:
-                print(f"{RED}❌ Impossible d'extraire le lien du Security Check (Ni entité, ni regex).{RESET}")
+                print(f"{RED}❌ Impossible d'extraire le lien du Security Check.{RESET}")
                 await self.send_bot_command("TikTok")
                 return
-        # =========================================================================
 
         # --- 1. DETECTION DE TÂCHE ---
         if "Link :" in text and "Action :" in text:
@@ -379,15 +470,17 @@ class TikTokTaskBot:
                         self.stats["earned"] += local_gain
                         self.stats["tasks"] += 1
                         self.save_json("stats.json", self.stats)
+                        
+                        # --- SUPABASE UPDATE ---
+                        self.update_cashcoin(local_gain)
+                        # -----------------------
+
                         print(f"{GREEN}✅ COMMENT TERMINE (+{local_gain}){RESET}")
 
                         if buttons:
                             for i, row in enumerate(buttons):
                                 for j, btn in enumerate(row):
                                     if "Completed" in btn.text or "✅" in btn.text:
-                                        # On ne change pas self.last_sent_msg ici car c'est un click
-                                        # Mais logiquement on veut souvent redemander une tache après
-                                        # 👇 AJOUT ICI : On sauvegarde l'action "Completed"
                                         self.last_sent_msg = btn.text
                                         print(f"{MAGENTA}💾 Sauvegarde état : {btn.text}{RESET}")
                                         await event.message.click(i, j)
@@ -403,6 +496,10 @@ class TikTokTaskBot:
                         self.stats["tasks"] += 1
                         self.save_json("stats.json", self.stats)
 
+                        # --- SUPABASE UPDATE ---
+                        self.update_cashcoin(local_gain)
+                        # -----------------------
+
                         print(f"{GREEN}✅ TASK TERMINE (+{local_gain}){RESET}")
                         print(f"{CYAN}➡️  Validation Task...{RESET}", flush=True)
                         
@@ -410,20 +507,15 @@ class TikTokTaskBot:
                             for i, row in enumerate(buttons):
                                 for j, btn in enumerate(row):
                                     if "Completed" in btn.text or "✅" in btn.text:
-                                        # 👇 AJOUT ICI : On sauvegarde l'action "Completed"
                                         self.last_sent_msg = btn.text
                                         print(f"{MAGENTA}💾 Sauvegarde état : {btn.text}{RESET}")
-                                        # Clic sur Completed
                                         await event.message.click(i, j)
-                                        # NOTE : Si un captcha arrive juste après ce clic, 
-                                        # renvoyer "TikTok" est souvent la meilleure façon de reprendre
                                         return
 
         # --- 2. GESTION SUIVANTE ---
         elif "added" in text.lower() or "credited" in text.lower():
             await asyncio.sleep(4)
             self.last_sent_msg = "Tiktok"
-            print(f"{MAGENTA}💾 Sauvegarde état : {btn.text}{RESET}")
             await self.send_bot_command("TikTok")
 
         # --- 3. PAS DE TASK ---
@@ -449,7 +541,6 @@ class TikTokTaskBot:
             for i, row in enumerate(buttons):
                 for j, btn in enumerate(row):
                     if btn.text == target:
-                        # 👇 AJOUT ICI : On sauvegarde l'action "Completed"
                         self.last_sent_msg = btn.text
                         print(f"{MAGENTA}💾 Sauvegarde état : {btn.text}{RESET}")
                         await event.message.click(i, j)
@@ -472,13 +563,20 @@ class TikTokTaskBot:
                 self.last_sent_msg = "Tiktok"
                 await self.send_bot_command("TikTok")
 
-    # ---------- MENU PRINCIPAL (Inchangé sauf appel clear) ----------
+    # ---------- MENU PRINCIPAL ----------
     async def menu(self):
+        # AUTHENTIFICATION OBLIGATOIRE AU DÉMARRAGE
+        self.authenticate_user()
+
         while True:
             clear_screen()
             adb_status = f"{GREEN}CONNECTÉ{RESET}" if self.detect_device() else f"{RED}DÉCONNECTÉ{RESET}"
             acc_count = len(self.accounts)
             total_earned = self.stats.get("earned", 0.0)
+            
+            # Affichage de l'utilisateur connecté
+            user_info = f"{CYAN}{self.current_user['nom']}{RESET}" if self.current_user else "Inconnu"
+            db_cash = f"{YELLOW}{self.current_user['cashnow']}/{self.current_user['max']}{RESET}" if self.current_user else "0/0"
 
             print(f"""
 {BLUE}███╗   ███╗██╗ ██████╗██╗  ██╗
@@ -486,13 +584,15 @@ class TikTokTaskBot:
 ██╔████╔██║██║██║     ███████║
 ██║╚██╔╝██║██║██║     ██╔══██║
 ██║ ╚═╝ ██║██║╚██████╗██║  ██║
-╚═╝      ╚═╝╚═╝ ╚═════╝╚═╝  ╚═╝{RESET}
+╚═╝     ╚═╝╚═╝ ╚═════╝╚═╝  ╚═╝{RESET}
 {DIM}━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━{RESET}
-{WHITE}🤖 BOT AUTOMATION V3.4.3 (Security Fix) {DIM}|{RESET} {CYAN}BY MICH{RESET}
+{WHITE}🤖 BOT AUTOMATION V3.5 (DB EDITION) {DIM}|{RESET} {CYAN}BY MICH{RESET}
 {DIM}━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━{RESET}
+ 👤 User          : {user_info}
+ 💳 CashCoin (DB) : {db_cash}
  📱 Status ADB    : {adb_status}
- 👥 Comptes         : {WHITE}{acc_count}{RESET}
- 💰 Total Gagné     : {YELLOW}{total_earned:.1f} CC{RESET}
+ 👥 Comptes       : {WHITE}{acc_count}{RESET}
+ 💰 Session Local : {YELLOW}{total_earned:.1f} CC{RESET}
 {DIM}━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━{RESET}
  {WHITE}[1]{RESET} ▶️  LANCER LE FARMING
  {WHITE}[2]{RESET} ➕  AJOUTER UN COMPTE
@@ -507,7 +607,7 @@ class TikTokTaskBot:
             if choice == "1":
                 if self.accounts: 
                     self.stats["earned"] = 0.0   
-                    self.stats["tasks"] = 0       
+                    self.stats["tasks"] = 0        
                     self.save_json("stats.json", self.stats)
                     print(f"{GREEN}💰 Compteur remis à 0 pour cette session.{RESET}")
                     await asyncio.sleep(1)
