@@ -5,6 +5,7 @@ import re
 import subprocess
 import time
 import requests
+import threading
 import uiautomator2 as u2
 from dotenv import load_dotenv
 from telethon import TelegramClient, events
@@ -266,6 +267,46 @@ votre limite de CashCoin.
     def focus_termux(self):
         os.system(f"{self.adb} am start --activity-brought-to-front {TERMUX_PACKAGE} > /dev/null 2>&1")
 
+    # ---------- ALARME SONORE ----------
+    def play_alarm_loop(self):
+        """Joue le son en boucle dans un thread séparé"""
+        print(f"{RED}{BOLD}🔊 SONNERIE ACTIVÉE - RÉVEILLE-TOI !{RESET}")
+        while self.alarm_active:
+            # Utilise play-audio (Termux API) ou mpv
+            if os.path.exists("alarm.mp3"):
+                os.system("play-audio alarm.mp3 > /dev/null 2>&1")
+                time.sleep(0.5)
+            else:
+                # Beep système si pas de fichier
+                print(f"{RED}⚠️ Fichier alarm.mp3 introuvable !{RESET}")
+                time.sleep(1)
+
+    async def trigger_manual_check(self):
+        """Active le volume max et lance la boucle de son"""
+        # 1. Mettre le volume à fond via ADB (Stream 3 = Music)
+        print(f"{YELLOW}🔊 Augmentation du volume au MAX...{RESET}")
+        for _ in range(15): # Répéter pour être sûr d'être au max
+             os.system(f"{self.adb} input keyevent 24")
+        
+        # 2. Lancer le son en arrière-plan
+        self.alarm_active = True
+        alarm_thread = threading.Thread(target=self.play_alarm_loop)
+        alarm_thread.start()
+
+        # 3. Attendre l'action de l'utilisateur
+        print(f"\n{RED}████████████████████████████████████████{RESET}")
+        print(f"{RED}🚨  SECURITY CHECK COMPLEXE DÉTECTÉ !  🚨{RESET}")
+        print(f"{YELLOW}👉 Résous le captcha sur ton téléphone.{RESET}")
+        print(f"{YELLOW}👉 Une fois fini, appuie sur [ENTRÉE] ici.{RESET}")
+        print(f"{RED}████████████████████████████████████████{RESET}\n")
+        
+        # Astuce: input() est bloquant, donc le bot s'arrête ici jusqu'à ta réponse
+        await asyncio.to_thread(input, f"{BOLD}Appuie sur Entrée pour arrêter l'alarme...{RESET}")
+        
+        # 4. Arrêter le son
+        self.alarm_active = False
+        print(f"{GREEN}✅ Alarme arrêtée. Reprise du script...{RESET}")
+        alarm_thread.join()
     # ---------- ACTIONS  ----------
     async def do_task(self, account_idx, link, action, specific_text=None):
         try:
@@ -397,60 +438,74 @@ votre limite de CashCoin.
         # =========================================================================
         if "Security check" in text and "verification" in text:
             print(f"\n{RED}{BOLD}🛡️ SECURITY CHECK DETECTÉ !{RESET}")
-            full_link = None
-            
-            if event.message.entities:
-                for entity in event.message.entities:
-                    if isinstance(entity, MessageEntityTextUrl):
-                        if "smmkingdom.com" in entity.url:
-                            full_link = entity.url
-                            break
-            
-            if not full_link:
-                url_match = re.search(r'(https?://smmkingdom\.com/tasker/captcha-test/\S+)', text)
-                if url_match:
-                    full_link = url_match.group(1).rstrip(')')
+            # --- DETECTION DU TYPE DE CHECK ---
+            # Si le texte contient "Correct answer", "emoji" ou "image", c'est le check difficile
+            is_hard_check = "Correct answer" in text or "emoji" in text or "image" in text
 
-            if full_link:
-                print(f"{WHITE}🔗 Lien Captcha Trouvé : {CYAN}{full_link}{RESET}")
-                print(f"{YELLOW}🌍 Ouverture Chrome...{RESET}")
-                cmd_open = f'{self.adb} am start -n {CHROME_ACTIVITY} -d "{full_link}" > /dev/null 2>&1'
-                os.system(cmd_open)
+            if is_hard_check:
+                # 🚨 CAS 2 : CHALLENGE COMPLEXE -> ALARME
+                await self.trigger_manual_check()
                 
-                print(f"{YELLOW}⏱️  Attente 25 secondes pour chargement...{RESET}")
-                await asyncio.sleep(25)
-                
-                print(f"{YELLOW}point_up  Tentative de clic sur le bouton de vérification...{RESET}")
-                try:
-                    d = u2.connect() 
-                    if d(textContains="Continue").exists(timeout=5):
-                        d(textContains="Continue").click()
-                        print(f"{GREEN}✅ Clic effectué sur 'Click here'{RESET}")
-                    elif d(textContains="Verify").exists(timeout=2):
-                        d(textContains="Verify").click()
-                        print(f"{GREEN}✅ Clic effectué sur 'Verify'{RESET}")
-                    elif d(className="android.widget.Button").exists(timeout=2):
-                        d(className="android.widget.Button").click()
-                        print(f"{GREEN}✅ Clic effectué sur un bouton générique{RESET}")
-                    else:
-                        print(f"{RED}⚠️ Aucun bouton détecté.{RESET}")
-                    await asyncio.sleep(5)
-                except Exception as e:
-                    print(f"{RED}❌ Erreur uiautomator2 : {e}{RESET}")
-
-                print(f"{YELLOW}🔒 Fermeture Chrome...{RESET}")
-                os.system(f'{self.adb} am force-stop {CHROME_PKG_NAME} > /dev/null 2>&1')
-                os.system(f"{self.adb} am kill-all > /dev/null 2>&1")
-                self.focus_termux()
-                
-                print(f"{GREEN}✅ Vérification terminée.{RESET}")
-                print(f"{CYAN}🔄 Renvoi de la dernière commande : {BOLD}{self.last_sent_msg}{RESET}")
+                # Une fois que l'utilisateur a appuyé sur Entrée :
+                print(f"{CYAN}🔄 Renvoi de la dernière commande après résolution manuelle...{RESET}")
                 await self.send_bot_command(self.last_sent_msg)
                 return
+
             else:
-                print(f"{RED}❌ Impossible d'extraire le lien du Security Check.{RESET}")
-                await self.send_bot_command("TikTok")
-                return
+                # 🤖 CAS 1 : CHECK SIMPLE -> AUTO-SOLVE (Ton ancien code)
+                full_link = None
+                if event.message.entities:
+                    for entity in event.message.entities:
+                        if isinstance(entity, MessageEntityTextUrl):
+                            if "smmkingdom.com" in entity.url:
+                                full_link = entity.url
+                                break
+                
+                if not full_link:
+                    url_match = re.search(r'(https?://smmkingdom\.com/tasker/captcha-test/\S+)', text)
+                    if url_match:
+                        full_link = url_match.group(1).rstrip(')')
+    
+                if full_link:
+                    print(f"{WHITE}🔗 Lien Captcha Trouvé : {CYAN}{full_link}{RESET}")
+                    print(f"{YELLOW}🌍 Ouverture Chrome...{RESET}")
+                    cmd_open = f'{self.adb} am start -n {CHROME_ACTIVITY} -d "{full_link}" > /dev/null 2>&1'
+                    os.system(cmd_open)
+                    
+                    print(f"{YELLOW}⏱️  Attente 25 secondes pour chargement...{RESET}")
+                    await asyncio.sleep(25)
+                    
+                    print(f"{YELLOW}point_up  Tentative de clic sur le bouton de vérification...{RESET}")
+                    try:
+                        d = u2.connect() 
+                        if d(textContains="Continue").exists(timeout=5):
+                            d(textContains="Continue").click()
+                            print(f"{GREEN}✅ Clic effectué sur 'Click here'{RESET}")
+                        elif d(textContains="Verify").exists(timeout=2):
+                            d(textContains="Verify").click()
+                            print(f"{GREEN}✅ Clic effectué sur 'Verify'{RESET}")
+                        elif d(className="android.widget.Button").exists(timeout=2):
+                            d(className="android.widget.Button").click()
+                            print(f"{GREEN}✅ Clic effectué sur un bouton générique{RESET}")
+                        else:
+                            print(f"{RED}⚠️ Aucun bouton détecté.{RESET}")
+                        await asyncio.sleep(5)
+                    except Exception as e:
+                        print(f"{RED}❌ Erreur uiautomator2 : {e}{RESET}")
+    
+                    print(f"{YELLOW}🔒 Fermeture Chrome...{RESET}")
+                    os.system(f'{self.adb} am force-stop {CHROME_PKG_NAME} > /dev/null 2>&1')
+                    os.system(f"{self.adb} am kill-all > /dev/null 2>&1")
+                    self.focus_termux()
+                    
+                    print(f"{GREEN}✅ Vérification terminée.{RESET}")
+                    print(f"{CYAN}🔄 Renvoi de la dernière commande : {BOLD}{self.last_sent_msg}{RESET}")
+                    await self.send_bot_command(self.last_sent_msg)
+                    return
+                else:
+                    print(f"{RED}❌ Impossible d'extraire le lien du Security Check.{RESET}")
+                    await self.send_bot_command("TikTok")
+                    return
 
         # --- 1. DETECTION DE TÂCHE ---
         if "Link :" in text and "Action :" in text:
@@ -600,7 +655,7 @@ votre limite de CashCoin.
 ██║ ╚═╝ ██║██║╚██████╗██║  ██║
 ╚═╝     ╚═╝╚═╝ ╚═════╝╚═╝  ╚═╝{RESET}
 {DIM}━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━{RESET}
-{WHITE}🤖 BOT AUTOMATION V3.5.3 (DB EDITION) {DIM}|{RESET} {CYAN}BY MICH{RESET}
+{WHITE}🤖 BOT AUTOMATION V3.6 (DB EDITION) {DIM}|{RESET} {CYAN}BY MICH{RESET}
 {DIM}━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━{RESET}
  👤 User          : {user_info}
  💳 CashCoin (DB) : {db_cash}
