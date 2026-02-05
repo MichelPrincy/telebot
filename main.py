@@ -269,34 +269,33 @@ votre limite de CashCoin.
 
     # ---------- ALARME SONORE ----------
     def play_alarm_loop(self):
-        """Joue le son en boucle dans un thread séparé"""
-        print(f"{RED}{BOLD}🔊 SONNERIE ACTIVÉE - RÉVEILLE-TOI !{RESET}")
-        
-        # Vérification si mpv est installé
-        has_mpv = os.system("which mpv > /dev/null 2>&1") == 0
+        """Joue le son ET vibre en boucle"""
+        print(f"{RED}{BOLD}🔊 SONNERIE ET VIBRATION ACTIVÉES !{RESET}")
         
         while self.alarm_active:
+            # 1. Jouer le son avec termux-media-player (votre commande)
             if os.path.exists("alarm.mp3"):
-                if has_mpv:
-                    # Utilise MPV (plus fiable sur Termux)
-                    os.system("mpv alarm.mp3 --no-terminal > /dev/null 2>&1")
-                else:
-                    # Fallback sur play-audio (Termux API)
-                    os.system("play-audio alarm.mp3 > /dev/null 2>&1")
-                    # Petite pause au cas où la commande échoue instantanément
-                    time.sleep(1)
+                os.system("termux-media-player play alarm.mp3 > /dev/null 2>&1")
             else:
-                # Beep système si pas de fichier
-                print(f"{RED}⚠️ Fichier alarm.mp3 introuvable !{RESET}")
-                time.sleep(1)
+                os.system(f"{self.adb} input keyevent 24") # Beep volume si pas de mp3
+            
+            # 2. Vibreur via ADB (votre commande)
+            # On lance 3 vibrations rapides
+            os.system(f"{self.adb} cmd vibrator vibrate 1000")
+            time.sleep(1.1) # Attendre que la vibration finisse
+            
+            # Petite pause avant de recommencer la boucle si le MP3 est court
+            # Si le MP3 est long, termux-media-player rend la main tout de suite, 
+            # donc on peut ajouter un sleep ici pour ne pas spammer la commande play
+            time.sleep(2)
     async def trigger_manual_check(self):
         """Active le volume max et lance la boucle de son"""
-        # 1. Mettre le volume à fond via ADB (Stream 3 = Music)
-        print(f"{YELLOW}🔊 Augmentation du volume au MAX...{RESET}")
-        for _ in range(15): # Répéter pour être sûr d'être au max
-             os.system(f"{self.adb} input keyevent 24")
+        # 1. Monter le volume du téléphone au maximum
+        print(f"{YELLOW}🔊 Volume MAX...{RESET}")
+        for _ in range(10): 
+             os.system(f"{self.adb} input keyevent 24") # Volume UP
         
-        # 2. Lancer le son en arrière-plan
+        # 2. Lancer le thread d'alarme
         self.alarm_active = True
         alarm_thread = threading.Thread(target=self.play_alarm_loop)
         alarm_thread.start()
@@ -663,7 +662,7 @@ votre limite de CashCoin.
 ██║ ╚═╝ ██║██║╚██████╗██║  ██║
 ╚═╝     ╚═╝╚═╝ ╚═════╝╚═╝  ╚═╝{RESET}
 {DIM}━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━{RESET}
-{WHITE}🤖 BOT AUTOMATION V3.6.1 (DB EDITION) {DIM}|{RESET} {CYAN}BY MICH{RESET}
+{WHITE}🤖 BOT AUTOMATION V3.6.2 (DB EDITION) {DIM}|{RESET} {CYAN}BY MICH{RESET}
 {DIM}━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━{RESET}
  👤 User          : {user_info}
  💳 CashCoin (DB) : {db_cash}
