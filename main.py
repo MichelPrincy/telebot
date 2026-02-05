@@ -38,12 +38,6 @@ CHROME_ACTIVITY = "com.android.chrome/com.google.android.apps.chrome.Main"
 GAIN_LIKE = 1.1
 GAIN_FOLLOW = 3.0
 
-# ================== COORDONNÉES ==================
-APP_CHOOSER = {
-    1: "150 1800", 2: "350 1800", 3: "530 1800", 4: "740 1800",
-    5: "930 1800", 6: "150 2015", 7: "340 2015", 8: "530 2015",
-    9: "740 2015", 10: "930 2015",
-}
 
 # ================== TELEGRAM ==================
 API_ID = 21426921
@@ -71,6 +65,7 @@ class TikTokTaskBot:
         self.supabase: Client = create_client(SUPABASE_URL, SUPABASE_KEY)
         self.user_session_file = "user_session.json"
         self.current_user = None # Stockera les infos de l'utilisateur connecté
+        self.dynamic_chooser = APP_CHOOSER.copy()
 
     def load_json(self, file, default):
         if os.path.exists(file):
@@ -86,21 +81,18 @@ class TikTokTaskBot:
 
     # ================== GESTION UTILISATEUR (SUPABASE) ==================
     def authenticate_user(self):
-        """Gère la connexion, la vérification et le stockage local"""
+        """Gère la connexion et charge les coordonnées personnalisées"""
         clear_screen()
         print(f"{CYAN}🔒 AUTHENTIFICATION UTILISATEUR{RESET}")
         
         nom = ""
         password = ""
         
-        # 1. Vérifier si une session existe déjà
         if os.path.exists(self.user_session_file):
-            print(f"{YELLOW}📂 Session locale détectée...{RESET}")
             session_data = self.load_json(self.user_session_file, {})
             nom = session_data.get("nom")
             password = session_data.get("pass")
         
-        # 2. Si pas de session, demander les infos
         if not nom or not password:
             print(f"{WHITE}Veuillez vous connecter (Infos Database){RESET}")
             nom = input(f"{BOLD}Nom d'utilisateur : {RESET}")
@@ -109,31 +101,51 @@ class TikTokTaskBot:
         print(f"{YELLOW}🌐 Vérification auprès du serveur...{RESET}")
 
         try:
-            # Requête Supabase : SELECT * FROM userbot WHERE nom = nom AND pass = pass
+            # 1. Connexion Utilisateur
             response = self.supabase.table("userbot").select("*").eq("nom", nom).eq("pass", password).execute()
             
             if response.data and len(response.data) > 0:
                 self.current_user = response.data[0]
                 print(f"{GREEN}✅ Connexion réussie ! Bienvenue {self.current_user['nom']}.{RESET}")
                 
-                # Sauvegarde locale pour la prochaine fois
                 self.save_json(self.user_session_file, {"nom": nom, "pass": password})
-                
-                # Vérification initiale des limites
                 self.check_limits_strict()
+
+                # ==========================================================
+                # 2. CHARGEMENT DES COORDONNÉES (NOUVEAU CODE)
+                # ==========================================================
+                print(f"{CYAN}📐 Chargement de la configuration écran...{RESET}")
+                user_id = self.current_user['id']
+                
+                conf_resp = self.supabase.table("user_config").select("coords").eq("user_id", user_id).execute()
+                
+                if conf_resp.data and len(conf_resp.data) > 0:
+                    # Cas 1 : Config trouvée en DB
+                    raw_coords = conf_resp.data[0]['coords']
+                    # Conversion des clés JSON (str) en int pour le script
+                    self.dynamic_chooser = {int(k): v for k, v in raw_coords.items()}
+                    print(f"{GREEN}✅ Coordonnées personnalisées chargées.{RESET}")
+                else:
+                    # Cas 2 : Pas de config, on crée celle par défaut en DB
+                    print(f"{YELLOW}⚠️ Aucune config trouvée, création des défauts...{RESET}")
+                    default_coords = APP_CHOOSER # Utilise la constante globale
+                    self.supabase.table("user_config").insert({
+                        "user_id": user_id,
+                        "coords": default_coords
+                    }).execute()
+                    self.dynamic_chooser = default_coords
+                    print(f"{GREEN}💾 Configuration par défaut sauvegardée en DB.{RESET}")
                 
                 time.sleep(2)
                 return True
             else:
-                print(f"{RED}❌ Identifiants incorrects ou compte inexistant.{RESET}")
-                # Si le fichier existait mais est invalide, on le supprime
-                if os.path.exists(self.user_session_file):
-                    os.remove(self.user_session_file)
-                input("Appuyez sur Entrée pour réessayer...")
-                return self.authenticate_user() # Récursion
+                print(f"{RED}❌ Identifiants incorrects.{RESET}")
+                if os.path.exists(self.user_session_file): os.remove(self.user_session_file)
+                input("Appuyez sur Entrée...")
+                return self.authenticate_user()
 
         except Exception as e:
-            print(f"{RED}❌ Erreur de connexion Database : {e}{RESET}")
+            print(f"{RED}❌ Erreur DB : {e}{RESET}")
             exit()
 
     def check_limits_strict(self):
@@ -256,7 +268,7 @@ votre limite de CashCoin.
     async def do_task(self, account_idx, link, action, specific_text=None):
         try:
             self.cleanup_apps()
-            coord_clone = APP_CHOOSER.get(account_idx, "100 1100")
+            coord_clone = self.dynamic_chooser.get(account_idx, "100 1100")
             
             # 1. Ouverture ADB
             os.system(f'{self.adb} am start -a android.intent.action.VIEW -d "{link}" > /dev/null 2>&1')
@@ -586,7 +598,7 @@ votre limite de CashCoin.
 ██║ ╚═╝ ██║██║╚██████╗██║  ██║
 ╚═╝     ╚═╝╚═╝ ╚═════╝╚═╝  ╚═╝{RESET}
 {DIM}━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━{RESET}
-{WHITE}🤖 BOT AUTOMATION V3.5.1 (DB EDITION) {DIM}|{RESET} {CYAN}BY MICH{RESET}
+{WHITE}🤖 BOT AUTOMATION V3.5.2 (DB EDITION) {DIM}|{RESET} {CYAN}BY MICH{RESET}
 {DIM}━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━{RESET}
  👤 User          : {user_info}
  💳 CashCoin (DB) : {db_cash}
