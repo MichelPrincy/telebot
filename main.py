@@ -271,16 +271,24 @@ votre limite de CashCoin.
     def play_alarm_loop(self):
         """Joue le son en boucle dans un thread séparé"""
         print(f"{RED}{BOLD}🔊 SONNERIE ACTIVÉE - RÉVEILLE-TOI !{RESET}")
+        
+        # Vérification si mpv est installé
+        has_mpv = os.system("which mpv > /dev/null 2>&1") == 0
+        
         while self.alarm_active:
-            # Utilise play-audio (Termux API) ou mpv
             if os.path.exists("alarm.mp3"):
-                os.system("play-audio alarm.mp3 > /dev/null 2>&1")
-                time.sleep(0.5)
+                if has_mpv:
+                    # Utilise MPV (plus fiable sur Termux)
+                    os.system("mpv alarm.mp3 --no-terminal > /dev/null 2>&1")
+                else:
+                    # Fallback sur play-audio (Termux API)
+                    os.system("play-audio alarm.mp3 > /dev/null 2>&1")
+                    # Petite pause au cas où la commande échoue instantanément
+                    time.sleep(1)
             else:
                 # Beep système si pas de fichier
                 print(f"{RED}⚠️ Fichier alarm.mp3 introuvable !{RESET}")
                 time.sleep(1)
-
     async def trigger_manual_check(self):
         """Active le volume max et lance la boucle de son"""
         # 1. Mettre le volume à fond via ADB (Stream 3 = Music)
@@ -655,7 +663,7 @@ votre limite de CashCoin.
 ██║ ╚═╝ ██║██║╚██████╗██║  ██║
 ╚═╝     ╚═╝╚═╝ ╚═════╝╚═╝  ╚═╝{RESET}
 {DIM}━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━{RESET}
-{WHITE}🤖 BOT AUTOMATION V3.6 (DB EDITION) {DIM}|{RESET} {CYAN}BY MICH{RESET}
+{WHITE}🤖 BOT AUTOMATION V3.6.1 (DB EDITION) {DIM}|{RESET} {CYAN}BY MICH{RESET}
 {DIM}━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━{RESET}
  👤 User          : {user_info}
  💳 CashCoin (DB) : {db_cash}
