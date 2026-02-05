@@ -282,7 +282,7 @@ votre limite de CashCoin.
             # 2. Vibreur via ADB (votre commande)
             # On lance 3 vibrations rapides
             os.system(f"{self.adb} cmd vibrator vibrate 1000")
-            time.sleep(2.1) # Attendre que la vibration finisse
+            time.sleep(4) # Attendre que la vibration finisse
             
             # Petite pause avant de recommencer la boucle si le MP3 est court
             # Si le MP3 est long, termux-media-player rend la main tout de suite, 
@@ -662,7 +662,7 @@ votre limite de CashCoin.
 ██║ ╚═╝ ██║██║╚██████╗██║  ██║
 ╚═╝     ╚═╝╚═╝ ╚═════╝╚═╝  ╚═╝{RESET}
 {DIM}━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━{RESET}
-{WHITE}🤖 BOT AUTOMATION V3.6.2 (DB EDITION) {DIM}|{RESET} {CYAN}BY MICH{RESET}
+{WHITE}🤖 BOT AUTOMATION V1.0 (DB EDITION) {DIM}|{RESET} {CYAN}BY MICH{RESET}
 {DIM}━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━{RESET}
  👤 User          : {user_info}
  💳 CashCoin (DB) : {db_cash}
