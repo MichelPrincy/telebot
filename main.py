@@ -295,11 +295,11 @@ votre limite de CashCoin.
                     sent = False
                     send_btn = self.d(resourceIdMatches="(?i).*id/(send_btn|publish_button|comment_publish_img)")
                     if send_btn.exists:
-                        send_btn.click()
+                        self.d.click(978, 1153)
                         sent = True
                     
                     if not sent:
-                        self.d.click(960, 1040) 
+                        self.d.click(978, 1153) 
                         sent = True
                     
                     print(f"{GREEN}    -> Commentaire envoyé !{RESET}")
@@ -586,7 +586,7 @@ votre limite de CashCoin.
 ██║ ╚═╝ ██║██║╚██████╗██║  ██║
 ╚═╝     ╚═╝╚═╝ ╚═════╝╚═╝  ╚═╝{RESET}
 {DIM}━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━{RESET}
-{WHITE}🤖 BOT AUTOMATION V3.5 (DB EDITION) {DIM}|{RESET} {CYAN}BY MICH{RESET}
+{WHITE}🤖 BOT AUTOMATION V3.5.1 (DB EDITION) {DIM}|{RESET} {CYAN}BY MICH{RESET}
 {DIM}━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━{RESET}
  👤 User          : {user_info}
  💳 CashCoin (DB) : {db_cash}
