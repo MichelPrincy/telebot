@@ -282,12 +282,12 @@ votre limite de CashCoin.
             # 2. Vibreur via ADB (votre commande)
             # On lance 3 vibrations rapides
             os.system(f"{self.adb} cmd vibrator vibrate 1000")
-            time.sleep(1.1) # Attendre que la vibration finisse
+            time.sleep(2.1) # Attendre que la vibration finisse
             
             # Petite pause avant de recommencer la boucle si le MP3 est court
             # Si le MP3 est long, termux-media-player rend la main tout de suite, 
             # donc on peut ajouter un sleep ici pour ne pas spammer la commande play
-            time.sleep(2)
+            time.sleep(4)
     async def trigger_manual_check(self):
         """Active le volume max et lance la boucle de son"""
         # 1. Monter le volume du téléphone au maximum
