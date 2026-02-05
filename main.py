@@ -23,7 +23,7 @@ DIM = "\033[2m"
 RESET = "\033[0m"
 
 # ================== PACKAGES ==================
-CLONE_CONTAINER_PACKAGE = "com.waxmoon.ma.gp"
+ = "com.waxmoon.ma.gp"
 TERMUX_PACKAGE = "com.termux/com.termux.app.TermuxActivity"
 # Correction: Nom du package seul pour le force-stop, et ComponentName pour le start
 CHROME_PKG_NAME = "com.android.chrome"
@@ -231,7 +231,7 @@ class TikTokTaskBot:
                     liked_success = True
 
             await asyncio.sleep(3)
-            os.system(f"{self.adb} am force-stop {CLONE_CONTAINER_PACKAGE}")
+            os.system(f"{self.adb} am force-stop {}")
             self.focus_termux()
             return True
 
@@ -332,6 +332,7 @@ class TikTokTaskBot:
                 # --- 5. Fermeture Chrome ---
                 print(f"{YELLOW}🔒 Fermeture Chrome...{RESET}")
                 os.system(f'{self.adb} am force-stop {CHROME_PKG_NAME} > /dev/null 2>&1')
+                os.system(f"{self.adb} am kill-all > /dev/null 2>&1")
                 self.focus_termux()
                 
                 # --- 6. Renvoyer la dernière commande ---
@@ -420,7 +421,7 @@ class TikTokTaskBot:
 
         # --- 2. GESTION SUIVANTE ---
         elif "added" in text.lower() or "credited" in text.lower():
-            await asyncio.sleep(2)
+            await asyncio.sleep(4)
             self.last_sent_msg = "Tiktok"
             print(f"{MAGENTA}💾 Sauvegarde état : {btn.text}{RESET}")
             await self.send_bot_command("TikTok")
@@ -436,7 +437,7 @@ class TikTokTaskBot:
                 await self.client.disconnect()
                 return
 
-            await asyncio.sleep(2)
+            await asyncio.sleep(4)
             print(f"\n{WHITE}🔍 Switch vers : {CYAN}{next_acc}{RESET}", flush=True)
             self.last_sent_msg = "Tiktok"
             await self.send_bot_command("TikTok")
