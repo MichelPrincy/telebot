@@ -289,16 +289,28 @@ votre limite de CashCoin.
             # donc on peut ajouter un sleep ici pour ne pas spammer la commande play
             time.sleep(4)
     async def trigger_manual_check(self):
-        """Active le volume max et lance la boucle de son"""
-        # 1. Monter le volume du téléphone au maximum
-        print(f"{YELLOW}🔊 Volume MAX...{RESET}")
-        for _ in range(10): 
-             os.system(f"{self.adb} input keyevent 24") # Volume UP
+        """Active le volume MEDIA max et lance la boucle de son"""
         
-        # 2. Lancer le thread d'alarme
+        # 1. Monter le volume MEDIA (Stream 3) au maximum
+        # Stream 3 = Musique/Média. On le force à 15 (le max standard sur Android)
+        print(f"{YELLOW}🔊 Augmentation du volume MÉDIA...{RESET}")
+        
+        # Méthode 1 : La plus propre (Android 10+)
+        # --stream 3 cible la musique, --set 15 met le volume à fond direct
+        os.system(f"{self.adb} cmd media_session volume --stream 3 --set 15")
+        
+        # Méthode 2 (Sécurité) : Si la commande du dessus échoue, on utilise l'ancienne méthode
+        # MAIS on lance le son AVANT de monter le volume pour être sûr de cibler le média
         self.alarm_active = True
         alarm_thread = threading.Thread(target=self.play_alarm_loop)
         alarm_thread.start()
+        
+        # On attend un tout petit peu que le lecteur audio prenne la priorité
+        await asyncio.sleep(0.5) 
+        
+        # Petite rafale de Volume Up au cas où le "set 15" n'a pas marché
+        for _ in range(5): 
+             os.system(f"{self.adb} input keyevent 24")
 
         # 3. Attendre l'action de l'utilisateur
         print(f"\n{RED}████████████████████████████████████████{RESET}")
@@ -307,11 +319,12 @@ votre limite de CashCoin.
         print(f"{YELLOW}👉 Une fois fini, appuie sur [ENTRÉE] ici.{RESET}")
         print(f"{RED}████████████████████████████████████████{RESET}\n")
         
-        # Astuce: input() est bloquant, donc le bot s'arrête ici jusqu'à ta réponse
+        # Astuce: input() est bloquant
         await asyncio.to_thread(input, f"{BOLD}Appuie sur Entrée pour arrêter l'alarme...{RESET}")
         
-        # 4. Arrêter le son
+        # 4. Arrêter le son et le player Termux
         self.alarm_active = False
+        os.system("termux-media-player stop") # Arrêt immédiat du son
         print(f"{GREEN}✅ Alarme arrêtée. Reprise du script...{RESET}")
         alarm_thread.join()
     # ---------- ACTIONS  ----------
@@ -662,7 +675,7 @@ votre limite de CashCoin.
 ██║ ╚═╝ ██║██║╚██████╗██║  ██║
 ╚═╝     ╚═╝╚═╝ ╚═════╝╚═╝  ╚═╝{RESET}
 {DIM}━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━{RESET}
-{WHITE}🤖 BOT AUTOMATION V1.0 (DB EDITION) {DIM}|{RESET} {CYAN}BY MICH{RESET}
+{WHITE}🤖 BOT AUTOMATION V1.1 (DB EDITION) {DIM}|{RESET} {CYAN}BY MICH{RESET}
 {DIM}━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━{RESET}
  👤 User          : {user_info}
  💳 CashCoin (DB) : {db_cash}
