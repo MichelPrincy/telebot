@@ -38,6 +38,10 @@ CHROME_ACTIVITY = "com.android.chrome/com.google.android.apps.chrome.Main"
 GAIN_LIKE = 1.1
 GAIN_FOLLOW = 3.0
 
+APP_CHOOSER = {
+    1: "150 1800",
+}
+
 
 # ================== TELEGRAM ==================
 API_ID = 21426921
@@ -598,7 +602,7 @@ votre limite de CashCoin.
 ██║ ╚═╝ ██║██║╚██████╗██║  ██║
 ╚═╝     ╚═╝╚═╝ ╚═════╝╚═╝  ╚═╝{RESET}
 {DIM}━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━{RESET}
-{WHITE}🤖 BOT AUTOMATION V3.5.2 (DB EDITION) {DIM}|{RESET} {CYAN}BY MICH{RESET}
+{WHITE}🤖 BOT AUTOMATION V3.5.3 (DB EDITION) {DIM}|{RESET} {CYAN}BY MICH{RESET}
 {DIM}━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━{RESET}
  👤 User          : {user_info}
  💳 CashCoin (DB) : {db_cash}
