@@ -41,8 +41,6 @@ GAIN_FOLLOW = 3.0
 APP_CHOOSER = {
     1: "150 1800",
 }
-
-
 # ================== TELEGRAM ==================
 API_ID = 21426921
 API_HASH = "07a304c39fc55aca132175b1dce4ad55"
