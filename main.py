@@ -310,7 +310,7 @@ votre limite de CashCoin.
         
         # Petite rafale de Volume Up au cas où le "set 15" n'a pas marché
         for _ in range(5): 
-             os.system(f"{self.adb} input keyevent 15")
+             os.system(f"{self.adb} input keyevent 24")
 
         # 3. Attendre l'action de l'utilisateur
         print(f"\n{RED}████████████████████████████████████████{RESET}")
@@ -675,7 +675,7 @@ votre limite de CashCoin.
 ██║ ╚═╝ ██║██║╚██████╗██║  ██║
 ╚═╝     ╚═╝╚═╝ ╚═════╝╚═╝  ╚═╝{RESET}
 {DIM}━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━{RESET}
-{WHITE}🤖 BOT AUTOMATION V1.2 (testv) {DIM}|{RESET} {CYAN}BY MICH{RESET}
+{WHITE}🤖 BOT AUTOMATION V1.2 (test) {DIM}|{RESET} {CYAN}BY MICH{RESET}
 {DIM}━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━{RESET}
  👤 User          : {user_info}
  💳 CashCoin (DB) : {db_cash}
