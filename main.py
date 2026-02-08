@@ -297,7 +297,7 @@ votre limite de CashCoin.
         
         # Méthode 1 : La plus propre (Android 10+)
         # --stream 3 cible la musique, --set 15 met le volume à fond direct
-        os.system(f"{self.adb} cmd media_session volume --stream 3 --set 20")
+        os.system(f"{self.adb} cmd media_session volume --stream 3 --set 10")
         
         # Méthode 2 (Sécurité) : Si la commande du dessus échoue, on utilise l'ancienne méthode
         # MAIS on lance le son AVANT de monter le volume pour être sûr de cibler le média
@@ -675,7 +675,7 @@ votre limite de CashCoin.
 ██║ ╚═╝ ██║██║╚██████╗██║  ██║
 ╚═╝     ╚═╝╚═╝ ╚═════╝╚═╝  ╚═╝{RESET}
 {DIM}━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━{RESET}
-{WHITE}🤖 BOT AUTOMATION V1.2 (DB EDITION) {DIM}|{RESET} {CYAN}BY MICH{RESET}
+{WHITE}🤖 BOT AUTOMATION V1.2 (test) {DIM}|{RESET} {CYAN}BY MICH{RESET}
 {DIM}━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━{RESET}
  👤 User          : {user_info}
  💳 CashCoin (DB) : {db_cash}
