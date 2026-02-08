@@ -275,7 +275,7 @@ votre limite de CashCoin.
         while self.alarm_active:
             # 1. Jouer le son avec termux-media-player (votre commande)
             if os.path.exists("alarm.mp3"):
-                os.system("termux-media-player play alarm.mp3 > /dev/null 2>&1")
+                os.system("mpv alarm.mp3 > /dev/null 2>&1")
             else:
                 os.system(f"{self.adb} input keyevent 24") # Beep volume si pas de mp3
             
@@ -370,11 +370,11 @@ votre limite de CashCoin.
                     sent = False
                     send_btn = self.d(resourceIdMatches="(?i).*id/(send_btn|publish_button|comment_publish_img)")
                     if send_btn.exists:
-                        self.d.click(978, 1250)
+                        self.d.click(978, 1320)
                         sent = True
                     
                     if not sent:
-                        self.d.click(978, 1250) 
+                        self.d.click(978, 1320) 
                         sent = True
                     
                     print(f"{GREEN}    -> Commentaire envoyé !{RESET}")
@@ -675,7 +675,7 @@ votre limite de CashCoin.
 ██║ ╚═╝ ██║██║╚██████╗██║  ██║
 ╚═╝     ╚═╝╚═╝ ╚═════╝╚═╝  ╚═╝{RESET}
 {DIM}━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━{RESET}
-{WHITE}🤖 BOT AUTOMATION V1.1 (DB EDITION) {DIM}|{RESET} {CYAN}BY MICH{RESET}
+{WHITE}🤖 BOT AUTOMATION V1.2 (DB EDITION) {DIM}|{RESET} {CYAN}BY MICH{RESET}
 {DIM}━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━{RESET}
  👤 User          : {user_info}
  💳 CashCoin (DB) : {db_cash}
