@@ -1,6 +1,7 @@
 import os
 import json
 import asyncio
+import httpx
 import re
 import subprocess
 import time
@@ -76,6 +77,7 @@ class TikTokTaskBot:
             options=ClientOptions(
                 postgrest_client_timeout=10,
                 headers={'Connection': 'keep-alive'}
+                http_client=httpx.Client(http2=False)
             )
         )
         self.user_session_file = "user_session.json"
