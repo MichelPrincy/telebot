@@ -76,7 +76,6 @@ class TikTokTaskBot:
             SUPABASE_KEY,
             options=ClientOptions(
                 postgrest_client_timeout=10,
-                headers={'Connection': 'keep-alive'}
                 http_client=httpx.Client(http2=False)
             )
         )
