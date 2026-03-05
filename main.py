@@ -6,6 +6,8 @@ import subprocess
 import time
 import requests
 import threading
+# Ajoute cet import en haut
+from supabase import create_client, Client, ClientOptions
 import uiautomator2 as u2
 from dotenv import load_dotenv
 from telethon import TelegramClient, events
@@ -65,7 +67,17 @@ class TikTokTaskBot:
         self.last_sent_msg = "TikTok" 
         
         # --- SUPABASE INIT ---
-        self.supabase: Client = create_client(SUPABASE_URL, SUPABASE_KEY)
+        
+        
+        # Modifie la ligne dans ton __init__
+        self.supabase: Client = create_client(
+            SUPABASE_URL, 
+            SUPABASE_KEY,
+            options=ClientOptions(
+                postgrest_client_timeout=10,
+                headers={'Connection': 'keep-alive'}
+            )
+        )
         self.user_session_file = "user_session.json"
         self.current_user = None # Stockera les infos de l'utilisateur connecté
         self.dynamic_chooser = APP_CHOOSER.copy()
@@ -675,7 +687,7 @@ votre limite de CashCoin.
 ██║ ╚═╝ ██║██║╚██████╗██║  ██║
 ╚═╝     ╚═╝╚═╝ ╚═════╝╚═╝  ╚═╝{RESET}
 {DIM}━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━{RESET}
-{WHITE}🤖 BOT AUTOMATION V1.2 (test) {DIM}|{RESET} {CYAN}BY MICH{RESET}
+{WHITE}🤖 BOT AUTOMATION V1.3 (test) {DIM}|{RESET} {CYAN}BY MICH{RESET}
 {DIM}━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━{RESET}
  👤 User          : {user_info}
  💳 CashCoin (DB) : {db_cash}
