@@ -121,12 +121,22 @@ class TikTokTaskBot:
                 self.check_limits_strict()
 
                 # ==========================================================
-                # 2. CHARGEMENT DES COORDONNÉES (NOUVEAU CODE)
+                # 2. CHARGEMENT DES COORDONNÉES (AVEC RETRY)
                 # ==========================================================
                 print(f"{CYAN}📐 Chargement de la configuration écran...{RESET}")
                 user_id = self.current_user['id']
                 
-                conf_resp = self.supabase.table("user_config").select("coords").eq("user_id", user_id).execute()
+                # --- NOUVEAU CODE : Boucle de réessai ---
+                conf_resp = None
+                for tentative in range(3):
+                    try:
+                        conf_resp = self.supabase.table("user_config").select("coords").eq("user_id", user_id).execute()
+                        break  # Si ça marche, on sort de la boucle
+                    except Exception as e:
+                        if tentative == 2: # Si c'est le 3ème échec, on lève l'erreur
+                            raise e
+                        time.sleep(0.5) # Petite pause d'une demi-seconde avant de réessayer
+                # ----------------------------------------
                 
                 if conf_resp.data and len(conf_resp.data) > 0:
                     # Cas 1 : Config trouvée en DB
