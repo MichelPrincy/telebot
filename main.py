@@ -71,14 +71,7 @@ class TikTokTaskBot:
         
         
         # Modifie la ligne dans ton __init__
-        self.supabase: Client = create_client(
-            SUPABASE_URL, 
-            SUPABASE_KEY,
-            options=ClientOptions(
-                postgrest_client_timeout=10,
-                http_client=httpx.Client(http2=False)
-            )
-        )
+        self.supabase: Client = create_client(SUPABASE_URL, SUPABASE_KEY)
         self.user_session_file = "user_session.json"
         self.current_user = None # Stockera les infos de l'utilisateur connecté
         self.dynamic_chooser = APP_CHOOSER.copy()
