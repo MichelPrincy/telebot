@@ -380,7 +380,18 @@ votre limite de CashCoin.
                     
                     text_to_send = specific_text if specific_text else "Wow super video 🔥"
                     print(f"{MAGENTA}    -> Écriture : {text_to_send}{RESET}")
-                    self.d.send_keys(text_to_send)
+                    # --- DÉBUT DES MODIFICATIONS ---
+                    try:
+                        self.d.send_keys(text_to_send)
+                    except Exception as e:
+                        print(f"{YELLOW}    ⚠️ Erreur connexion U2 lors du commentaire ({e}). Fallback via ADB...{RESET}")
+                        # Fallback : on écrit directement via le shell ADB (on remplace les espaces par %s pour ADB)
+                        adb_text = text_to_send.replace(" ", "%s")
+                        os.system(f"{self.adb} input text '{adb_text}'")
+                        
+                        # On tente de reconnecter uiautomator2 silencieusement pour la suite
+                        self.detect_device()
+                    # --- FIN DES MODIFICATIONS ---
                     await asyncio.sleep(1)
 
                     sent = False
@@ -667,6 +678,32 @@ votre limite de CashCoin.
                 print(f"\n{WHITE}🔍 Switch vers : {CYAN}{next_acc}{RESET}", flush=True)
                 self.last_sent_msg = "Tiktok"
                 await self.send_bot_command("TikTok")
+        # ==========================================
+        # --- AJOUTS POUR LES PROBLÈMES 2 ET 3 ---
+        # ==========================================
+
+        # PROBLÈME 2 : Le Timeout de 2 minutes
+        elif "The task wasn't completed within 2 minutes" in text:
+            print(f"{YELLOW}⏳ Timeout de tâche détecté. Fermeture de TikTok et relance...{RESET}")
+            
+            # --- NOUVEAUTÉ : Fermeture de l'application ---
+            self.cleanup_apps()  # Force l'arrêt du container clone
+            self.focus_termux()  # Ramène Termux au premier plan
+            await asyncio.sleep(1) # Petite pause pour laisser le téléphone respirer
+            # ----------------------------------------------
+
+            await self.send_bot_command("📝Tasks📝")
+            await asyncio.sleep(2)
+            await self.send_bot_command("TikTok")
+            return # On s'arrête là, le bot Telegram va envoyer les boutons VIP
+
+        # PROBLÈME 3 : Blocage sur le menu des comptes
+        elif "Please choose account from the list" in text:
+            print(f"{YELLOW}🔄 Blocage sur le menu compte. Retour en arrière forcé...{RESET}")
+            await self.send_bot_command("🔙Back")
+            await asyncio.sleep(2)
+            await self.send_bot_command("TikTok")
+            return
 
     # ---------- MENU PRINCIPAL ----------
     async def menu(self):
@@ -691,7 +728,7 @@ votre limite de CashCoin.
 ██║ ╚═╝ ██║██║╚██████╗██║  ██║
 ╚═╝     ╚═╝╚═╝ ╚═════╝╚═╝  ╚═╝{RESET}
 {DIM}━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━{RESET}
-{WHITE}🤖 BOT AUTOMATION V1.3 (test) {DIM}|{RESET} {CYAN}BY MICH{RESET}
+{WHITE}🤖 BOT AUTOMATION V1.4 (test) {DIM}|{RESET} {CYAN}BY MICH{RESET}
 {DIM}━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━{RESET}
  👤 User          : {user_info}
  💳 CashCoin (DB) : {db_cash}
