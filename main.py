@@ -370,42 +370,44 @@ votre limite de CashCoin.
             
             # --- COMMENTAIRE ---
             if "comment" in action_lower:
-                print(f"{MAGENTA}    💬 Mode Commentaire...{RESET}", flush=True)
+                print(f"{MAGENTA}    💬 Mode Commentaire (Stratégie Clavier Fixe)...{RESET}", flush=True)
+                # 1. Cliquer sur l'icône commentaire
                 os.system(f"{self.adb} input tap 990 1370")
                 await asyncio.sleep(3)
 
                 if self.d(className="android.widget.EditText").exists:
+                    # 2. Cliquer sur le champ texte pour s'assurer du focus
                     self.d(className="android.widget.EditText").click()
                     await asyncio.sleep(1)
                     
                     text_to_send = specific_text if specific_text else "Wow super video 🔥"
                     print(f"{MAGENTA}    -> Écriture : {text_to_send}{RESET}")
-                    # --- DÉBUT DES MODIFICATIONS ---
+                    
+                    # Écriture du texte
                     try:
                         self.d.send_keys(text_to_send)
                     except Exception as e:
-                        print(f"{YELLOW}    ⚠️ Erreur connexion U2 lors du commentaire ({e}). Fallback via ADB...{RESET}")
-                        # Fallback : on écrit directement via le shell ADB (on remplace les espaces par %s pour ADB)
+                        print(f"{YELLOW}    ⚠️ Erreur UI2, passage via ADB...{RESET}")
                         adb_text = text_to_send.replace(" ", "%s")
                         os.system(f"{self.adb} input text '{adb_text}'")
-                        
-                        # On tente de reconnecter uiautomator2 silencieusement pour la suite
                         self.detect_device()
-                    # --- FIN DES MODIFICATIONS ---
+                    
                     await asyncio.sleep(1)
 
-                    sent = False
-                    send_btn = self.d(resourceIdMatches="(?i).*id/(send_btn|publish_button|comment_publish_img)")
-                    if send_btn.exists:
-                        self.d.click(978, 1320)
-                        sent = True
-                    
-                    if not sent:
-                        self.d.click(978, 1320) 
-                        sent = True
+                    # --- NOUVELLE STRATÉGIE ---
+                    # 3. Cliquer sur (575, 554) pour désactiver/réduire le clavier
+                    print(f"{CYAN}    -> Réduction du clavier (clic zone neutre)...{RESET}")
+                    os.system(f"{self.adb} input tap 575 554")
+                    await asyncio.sleep(1.5) # On attend que le clavier disparaisse
+
+                    # 4. Envoyer avec les coordonnées fixes (965, 2095)
+                    print(f"{GREEN}    -> Envoi (Coordonnées fixes : 965, 2095)...{RESET}")
+                    os.system(f"{self.adb} input tap 965 2095")
                     
                     print(f"{GREEN}    -> Commentaire envoyé !{RESET}")
                     await asyncio.sleep(2)
+                    
+                    # 5. Fermer la fenêtre des commentaires (cliquer en haut)
                     os.system(f"{self.adb} input tap 500 200") 
                 else:
                     print(f"{RED}    ❌ Champ texte introuvable !{RESET}")
@@ -728,7 +730,7 @@ votre limite de CashCoin.
 ██║ ╚═╝ ██║██║╚██████╗██║  ██║
 ╚═╝     ╚═╝╚═╝ ╚═════╝╚═╝  ╚═╝{RESET}
 {DIM}━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━{RESET}
-{WHITE}🤖 BOT AUTOMATION V1.4 (test) {DIM}|{RESET} {CYAN}BY MICH{RESET}
+{WHITE}🤖 BOT AUTOMATION V2.0 (test) {DIM}|{RESET} {CYAN}BY MICH{RESET}
 {DIM}━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━{RESET}
  👤 User          : {user_info}
  💳 CashCoin (DB) : {db_cash}
