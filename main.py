@@ -383,10 +383,6 @@ votre limite de CashCoin.
                     # 2. Cliquer sur le champ texte pour s'assurer du focus
                     self.d(className="android.widget.EditText").click()
                     await asyncio.sleep(1)
-                    
-                    text_to_send = specific_text if specific_text else "Wow super video 🔥"
-                    print(f"{MAGENTA}    -> Écriture : {text_to_send}{RESET}")
-                    
                     # Écriture du texte
                     try:
                         self.d.send_keys(text_to_send)
@@ -756,7 +752,7 @@ votre limite de CashCoin.
 ██║ ╚═╝ ██║██║╚██████╗██║  ██║
 ╚═╝     ╚═╝╚═╝ ╚═════╝╚═╝  ╚═╝{RESET}
 {DIM}━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━{RESET}
-{WHITE}🤖 BOT AUTOMATION V2.2 (autosent) {DIM}|{RESET} {CYAN}BY MICH{RESET}
+{WHITE}🤖 BOT AUTOMATION V2.3 (autosent) {DIM}|{RESET} {CYAN}BY MICH{RESET}
 {DIM}━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━{RESET}
  👤 User          : {user_info}
  💳 CashCoin (DB) : {db_cash}
