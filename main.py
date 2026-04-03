@@ -375,33 +375,38 @@ votre limite de CashCoin.
             # --- COMMENTAIRE ---
             if "comment" in action_lower:
                 print(f"{MAGENTA}    💬 Mode Commentaire (Stratégie Clavier Fixe)...{RESET}", flush=True)
+                
                 # 1. Cliquer sur l'icône commentaire
                 os.system(f"{self.adb} input tap 990 1370")
                 await asyncio.sleep(3)
-
+            
                 if self.d(className="android.widget.EditText").exists:
                     # 2. Cliquer sur le champ texte pour s'assurer du focus
                     self.d(className="android.widget.EditText").click()
                     await asyncio.sleep(1)
+                    
                     text_to_send = specific_text if specific_text else "Wow super video 🔥"
                     print(f"{MAGENTA}    -> Écriture : {text_to_send}{RESET}")
+                    
                     # Écriture du texte
                     try:
                         self.d.send_keys(text_to_send)
                     except Exception as e:
                         print(f"{YELLOW}    ⚠️ Erreur UI2, passage via ADB...{RESET}")
+                        # Utilisation de ADB pour envoyer le texte sans redétecter le device
                         adb_text = text_to_send.replace(" ", "%s")
                         os.system(f"{self.adb} input text '{adb_text}'")
-                        self.detect_device()
+                        # Suppression de self.detect_device() ici pour éviter le timeout
                     
+                    # Petite pause pour laisser le texte s'afficher
                     await asyncio.sleep(1)
-
-                    # --- NOUVELLE STRATÉGIE ---
+            
+                    # --- EXÉCUTION DIRECTE DE LA SUITE ---
                     # 3. Cliquer sur (575, 554) pour désactiver/réduire le clavier
                     print(f"{CYAN}    -> Réduction du clavier (clic zone neutre)...{RESET}")
                     os.system(f"{self.adb} input tap 575 554")
-                    await asyncio.sleep(1.5) # On attend que le clavier disparaisse
-
+                    await asyncio.sleep(1.5) 
+            
                     # 4. Envoyer avec les coordonnées fixes (965, 2095)
                     print(f"{GREEN}    -> Envoi (Coordonnées fixes : 965, 2095)...{RESET}")
                     os.system(f"{self.adb} input tap 965 2095")
@@ -754,7 +759,7 @@ votre limite de CashCoin.
 ██║ ╚═╝ ██║██║╚██████╗██║  ██║
 ╚═╝     ╚═╝╚═╝ ╚═════╝╚═╝  ╚═╝{RESET}
 {DIM}━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━{RESET}
-{WHITE}🤖 BOT AUTOMATION V2.4 (autosent) {DIM}|{RESET} {CYAN}BY MICH{RESET}
+{WHITE}🤖 BOT AUTOMATION V2.5 (autosent) {DIM}|{RESET} {CYAN}BY MICH{RESET}
 {DIM}━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━{RESET}
  👤 User          : {user_info}
  💳 CashCoin (DB) : {db_cash}
