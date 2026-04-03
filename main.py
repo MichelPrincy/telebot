@@ -66,6 +66,8 @@ class TikTokTaskBot:
         self.client = TelegramClient("session_bot", API_ID, API_HASH)
         self.d = None 
         self.last_sent_msg = "TikTok" 
+        # 👇 NOUVEAU : Initialiser le chronomètre
+        self.last_activity_time = time.time()
         
         # --- SUPABASE INIT ---
         
@@ -236,6 +238,8 @@ votre limite de CashCoin.
 
     async def send_bot_command(self, message):
         self.last_sent_msg = message
+        # 👇 NOUVEAU : Mettre à jour le chrono
+        self.last_activity_time = time.time()
         await self.client.send_message(TARGET_BOT, message)
 
     def update_script(self):
@@ -467,6 +471,8 @@ votre limite de CashCoin.
         await self.client.start()
         self.client.remove_event_handler(self.on_message)
         self.client.add_event_handler(self.on_message, events.NewMessage(chats=TARGET_BOT))
+        # 👇 NOUVEAU : Lancer la tâche de surveillance en arrière-plan
+        self.client.loop.create_task(self.timeout_watcher())
         
         if not self.accounts:
             print(f"{RED}⚠️ Aucun compte configuré !{RESET}")
@@ -477,8 +483,28 @@ votre limite de CashCoin.
         
         await self.send_bot_command("TikTok") 
         await self.client.run_until_disconnected()
+        
+    async def timeout_watcher(self):
+        """Surveille s'il n'y a pas de réponse du bot après 2 minutes (120 secondes)."""
+        while True:
+            # Vérifie l'état toutes les 10 secondes pour ne pas surcharger le processeur
+            await asyncio.sleep(10) 
+            
+            # Si le temps actuel moins le temps de la dernière activité dépasse 120 secondes
+            if time.time() - self.last_activity_time > 120:
+                if self.last_sent_msg:
+                    print(f"\n{RED}⏳ Timeout détecté (2 min sans réponse). Le réseau ou le bot a buggé.{RESET}")
+                    print(f"{CYAN}🔄 Renvoi de la dernière commande : {self.last_sent_msg}{RESET}")
+                    
+                    # On reset le timer immédiatement pour éviter le spam
+                    self.last_activity_time = time.time()
+                    
+                    # On relance la commande bloquée
+                    await self.send_bot_command(self.last_sent_msg)
 
     async def on_message(self, event):
+        # 👇 NOUVEAU : Mettre à jour le chrono car on a reçu une réponse
+        self.last_activity_time = time.time()
         text = event.message.message or ""
         buttons = event.message.buttons
 
@@ -730,7 +756,7 @@ votre limite de CashCoin.
 ██║ ╚═╝ ██║██║╚██████╗██║  ██║
 ╚═╝     ╚═╝╚═╝ ╚═════╝╚═╝  ╚═╝{RESET}
 {DIM}━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━{RESET}
-{WHITE}🤖 BOT AUTOMATION V2.1 (test) {DIM}|{RESET} {CYAN}BY MICH{RESET}
+{WHITE}🤖 BOT AUTOMATION V2.2 (autosent) {DIM}|{RESET} {CYAN}BY MICH{RESET}
 {DIM}━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━{RESET}
  👤 User          : {user_info}
  💳 CashCoin (DB) : {db_cash}
