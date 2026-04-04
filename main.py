@@ -375,6 +375,15 @@ votre limite de CashCoin.
             # --- COMMENTAIRE ---
             if "comment" in action_lower:
                 print(f"{MAGENTA}    💬 Mode Commentaire (Stratégie Clavier Fixe)...{RESET}", flush=True)
+                # 👇 NOUVEAU : Reconnexion forcée de UI Automator 2 avant le commentaire
+                print(f"{YELLOW}🔌 Reconnexion de uiautomator2 en cours...{RESET}")
+                try:
+                    self.d = u2.connect(self.device_id)
+                    self.d.implicitly_wait(10.0)
+                    self.d.settings['operation_delay'] = (0.2, 0.2)
+                except Exception as e:
+                    print(f"{RED}⚠️ Erreur lors de la reconnexion U2 : {e}{RESET}")
+                # 👆 FIN DU NOUVEAU BLOC
                 
                 # 1. Cliquer sur l'icône commentaire
                 os.system(f"{self.adb} input tap 990 1370")
@@ -759,7 +768,7 @@ votre limite de CashCoin.
 ██║ ╚═╝ ██║██║╚██████╗██║  ██║
 ╚═╝     ╚═╝╚═╝ ╚═════╝╚═╝  ╚═╝{RESET}
 {DIM}━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━{RESET}
-{WHITE}🤖 BOT AUTOMATION V2.5 (autosent) {DIM}|{RESET} {CYAN}BY MICH{RESET}
+{WHITE}🤖 BOT AUTOMATION V3 (autoconnect) {DIM}|{RESET} {CYAN}BY MICH{RESET}
 {DIM}━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━{RESET}
  👤 User          : {user_info}
  💳 CashCoin (DB) : {db_cash}
