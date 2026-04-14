@@ -386,7 +386,7 @@ votre limite de CashCoin.
                 # 👆 FIN DU NOUVEAU BLOC
                 
                 # 1. Cliquer sur l'icône commentaire
-                os.system(f"{self.adb} input tap 995 1185")
+                os.system(f"{self.adb} input tap 995 1263")
                 await asyncio.sleep(3)
             
                 if self.d(className="android.widget.EditText").exists:
@@ -418,7 +418,7 @@ votre limite de CashCoin.
             
                     # 4. Envoyer avec les coordonnées fixes (965, 2095)
                     print(f"{GREEN}    -> Envoi (Coordonnées fixes : 965, 2095)...{RESET}")
-                    os.system(f"{self.adb} input tap 965 2110")
+                    os.system(f"{self.adb} input tap 960 2085")
                     
                     print(f"{GREEN}    -> Commentaire envoyé !{RESET}")
                     await asyncio.sleep(2)
@@ -503,7 +503,7 @@ votre limite de CashCoin.
             await asyncio.sleep(10) 
             
             # Si le temps actuel moins le temps de la dernière activité dépasse 120 secondes
-            if time.time() - self.last_activity_time > 120:
+            if time.time() - self.last_activity_time > 200:
                 if self.last_sent_msg:
                     print(f"\n{RED}⏳ Timeout détecté (2 min sans réponse). Le réseau ou le bot a buggé.{RESET}")
                     print(f"{CYAN}🔄 Renvoi de la dernière commande : {self.last_sent_msg}{RESET}")
@@ -768,7 +768,7 @@ votre limite de CashCoin.
 ██║ ╚═╝ ██║██║╚██████╗██║  ██║
 ╚═╝     ╚═╝╚═╝ ╚═════╝╚═╝  ╚═╝{RESET}
 {DIM}━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━{RESET}
-{WHITE}🤖 BOT AUTOMATION V3.3.3 (autoconnect) {DIM}|{RESET} {CYAN}BY MICH{RESET}
+{WHITE}🤖 BOT AUTOMATION V3.0 (autoconnect) {DIM}|{RESET} {CYAN}BY MICH{RESET}
 {DIM}━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━{RESET}
  👤 User          : {user_info}
  💳 CashCoin (DB) : {db_cash}
