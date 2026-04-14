@@ -354,13 +354,13 @@ votre limite de CashCoin.
             coord_clone = self.dynamic_chooser.get(account_idx, "100 1100")
             
             # 1. Ouverture ADB
-            os.system(f'{self.adb} am start -a android.intent.action.VIEW -d "{link}" > com.waxmoon.ma.gp /dev/null 2>&1')
+            os.system(f'{self.adb} am start -a android.intent.action.VIEW -d "{link}" -p com.waxmoon.ma.gp /dev/null 2>&1')
             await asyncio.sleep(4)
             os.system(f"{self.adb} input tap {coord_clone}")
             await asyncio.sleep(20) # Chargement
 
             # 2. Refresh
-            os.system(f'{self.adb} am start -a android.intent.action.VIEW -d "{link}" > com.waxmoon.ma.gp /dev/null 2>&1')
+            os.system(f'{self.adb} am start -a android.intent.action.VIEW -d "{link}" -p com.waxmoon.ma.gp /dev/null 2>&1')
             await asyncio.sleep(3)
             os.system(f"{self.adb} input tap {coord_clone}")
             
@@ -768,7 +768,7 @@ votre limite de CashCoin.
 ██║ ╚═╝ ██║██║╚██████╗██║  ██║
 ╚═╝     ╚═╝╚═╝ ╚═════╝╚═╝  ╚═╝{RESET}
 {DIM}━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━{RESET}
-{WHITE}🤖 BOT AUTOMATION V3.2 (autoconnect) {DIM}|{RESET} {CYAN}BY MICH{RESET}
+{WHITE}🤖 BOT AUTOMATION V3.3 (autoconnect) {DIM}|{RESET} {CYAN}BY MICH{RESET}
 {DIM}━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━{RESET}
  👤 User          : {user_info}
  💳 CashCoin (DB) : {db_cash}
