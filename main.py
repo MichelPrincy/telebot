@@ -386,7 +386,7 @@ votre limite de CashCoin.
                 # 👆 FIN DU NOUVEAU BLOC
                 
                 # 1. Cliquer sur l'icône commentaire
-                os.system(f"{self.adb} input tap 990 1370")
+                os.system(f"{self.adb} input tap 995 1185")
                 await asyncio.sleep(3)
             
                 if self.d(className="android.widget.EditText").exists:
@@ -418,7 +418,7 @@ votre limite de CashCoin.
             
                     # 4. Envoyer avec les coordonnées fixes (965, 2095)
                     print(f"{GREEN}    -> Envoi (Coordonnées fixes : 965, 2095)...{RESET}")
-                    os.system(f"{self.adb} input tap 965 2095")
+                    os.system(f"{self.adb} input tap 965 2110")
                     
                     print(f"{GREEN}    -> Commentaire envoyé !{RESET}")
                     await asyncio.sleep(2)
@@ -768,7 +768,7 @@ votre limite de CashCoin.
 ██║ ╚═╝ ██║██║╚██████╗██║  ██║
 ╚═╝     ╚═╝╚═╝ ╚═════╝╚═╝  ╚═╝{RESET}
 {DIM}━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━{RESET}
-{WHITE}🤖 BOT AUTOMATION V3 (autoconnect) {DIM}|{RESET} {CYAN}BY MICH{RESET}
+{WHITE}🤖 BOT AUTOMATION V3.1 (autoconnect) {DIM}|{RESET} {CYAN}BY MICH{RESET}
 {DIM}━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━{RESET}
  👤 User          : {user_info}
  💳 CashCoin (DB) : {db_cash}
