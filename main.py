@@ -389,7 +389,7 @@ votre limite de CashCoin.
                 os.system(f"{self.adb} input tap 995 1263")
                 await asyncio.sleep(3)
             
-                if self.d(className="android.widget.EditText").exists:
+                if self.d(className="android.widget.EditText").exists(timeout=5):
                     # 2. Cliquer sur le champ texte pour s'assurer du focus
                     self.d(className="android.widget.EditText").click()
                     await asyncio.sleep(1)
@@ -398,14 +398,26 @@ votre limite de CashCoin.
                     print(f"{MAGENTA}    -> Écriture : {text_to_send}{RESET}")
                     
                     # Écriture du texte
+                    # Stratégie 1 : clipboard (la plus fiable)
                     try:
-                        self.d.send_keys(text_to_send)
-                    except Exception as e:
-                        print(f"{YELLOW}    ⚠️ Erreur UI2, passage via ADB...{RESET}")
-                        # Utilisation de ADB pour envoyer le texte sans redétecter le device
-                        adb_text = text_to_send.replace(" ", "%s")
-                        os.system(f"{self.adb} input text '{adb_text}'")
-                        # Suppression de self.detect_device() ici pour éviter le timeout
+                        import subprocess
+                        subprocess.run(
+                            f'adb -s {self.device_id} shell am broadcast -a clipper.set -e text "{text_to_send}"',
+                            shell=True
+                        )
+                        # Coller avec CTRL+V via keyevent
+                        os.system(f"{self.adb} input keyevent 279")  # KEYCODE_PASTE
+                        await asyncio.sleep(1)
+                        print(f"{GREEN}    -> Texte collé via clipboard{RESET}")
+                    except:
+                        # Stratégie 2 : send_keys UI2
+                        try:
+                            self.d(className="android.widget.EditText").set_text(text_to_send)
+                        except:
+                            # Stratégie 3 : ADB input text
+                            import base64
+                            b64 = base64.b64encode(text_to_send.encode()).decode()
+                            os.system(f"{self.adb} am broadcast -a ADB_INPUT_B64 --es msg {b64}")
                     
                     # Petite pause pour laisser le texte s'afficher
                     await asyncio.sleep(1)
@@ -418,7 +430,15 @@ votre limite de CashCoin.
             
                     # 4. Envoyer avec les coordonnées fixes (965, 2095)
                     print(f"{GREEN}    -> Envoi (Coordonnées fixes : 965, 2095)...{RESET}")
-                    os.system(f"{self.adb} input tap 960 2085")
+                    # Chercher le bouton Send par description ou ID
+                    send_btn = self.d(descriptionContains="Send") or \
+                               self.d(resourceIdMatches=".*send.*") or \
+                               self.d(textContains="Post")
+                    
+                    if send_btn.exists(timeout=3):
+                        send_btn.click()
+                    else:
+                        os.system(f"{self.adb} input tap 960 2085")  # fallback coordonnées
                     
                     print(f"{GREEN}    -> Commentaire envoyé !{RESET}")
                     await asyncio.sleep(2)
@@ -429,7 +449,7 @@ votre limite de CashCoin.
                     print(f"{RED}    ❌ Champ texte introuvable !{RESET}")
 
             # --- FOLLOW ---
-            if "follow" in action_lower or "profile" in action_lower:
+            elif "follow" in action_lower or "profile" in action_lower:
                 print(f"{CYAN}    👤 Recherche bouton Follow...{RESET}", flush=True)
                 clicked = False
                 for keyword in FOLLOW_KEYWORDS:
@@ -671,7 +691,7 @@ votre limite de CashCoin.
         # --- 2. GESTION SUIVANTE ---
         elif "added" in text.lower() or "credited" in text.lower():
             await asyncio.sleep(4)
-            self.last_sent_msg = "Tiktok"
+            self.last_sent_msg = "TikTok"
             await self.send_bot_command("TikTok")
 
         # --- 3. PAS DE TASK ---
@@ -687,11 +707,19 @@ votre limite de CashCoin.
 
             await asyncio.sleep(4)
             print(f"\n{WHITE}🔍 Switch vers : {CYAN}{next_acc}{RESET}", flush=True)
-            self.last_sent_msg = "Tiktok"
+            self.last_sent_msg = "TikTok"
             await self.send_bot_command("TikTok")
 
         # --- 4. GESTION BOUTONS COMPTE ---
         elif buttons and "Link" not in text:
+            # 🔒 CAS SPECIAL : Figé sur la liste des comptes (menu réseau social)
+            if "Choose social network" in text:
+                print(f"{YELLOW}🔄 Figé sur menu réseau. Envoi Back + TikTok...{RESET}")
+                await self.send_bot_command("🔙Back")
+                await asyncio.sleep(2)
+                await self.send_bot_command("TikTok")
+                return
+        
             target = self.accounts[self.index]
             clicked = False
             for i, row in enumerate(buttons):
@@ -703,21 +731,59 @@ votre limite de CashCoin.
                         clicked = True
                         return
             if not clicked and "Select account" in text:
-                 print(f"{RED}Compte {target} introuvable.{RESET}", flush=True)
+                print(f"{RED}Compte {target} introuvable.{RESET}", flush=True)
+
+
+        # --- COMPTE EN RÉVISION ---
+        elif "is on review now" in text:
+            print(f"{YELLOW}🟡 Compte en cours de vérification (review). Passage au suivant...{RESET}")
+            self.get_next_active_index()
+            next_acc = self.accounts[self.index]
+            if next_acc in self.paused_accounts:
+                print(f"{RED}Tous les comptes sont en pause.{RESET}")
+                await self.client.disconnect()
+                return
+            await asyncio.sleep(2)
+            print(f"\n{WHITE}🔍 Switch vers : {CYAN}{next_acc}{RESET}", flush=True)
+            self.last_sent_msg = "TikTok"
+            await self.send_bot_command("TikTok")
+            return
+
+        # --- FIGÉ SUR LE MENU D'ACCUEIL ---
+        elif "Marketing Balance" in text or "How to work" in text:
+            print(f"{YELLOW}🏠 Figé sur le menu d'accueil. Envoi Tasks + TikTok...{RESET}")
+            await self.send_bot_command("📝Tasks📝")
+            await asyncio.sleep(2)
+            await self.send_bot_command("TikTok")
+            return
+
         
         # --- 5. COMPTE A RÉPARER ---
-        elif "too" in text or "warnings" in text:
+        elif "warnings" in text or "too" in text:
             if text and len(text.strip()) > 0:
-                print(f"{YELLOW}⚠️ Compte à réparer : {text}{RESET}", flush=True)
-                self.get_next_active_index()
-                next_acc = self.accounts[self.index]
-                if next_acc in self.paused_accounts:
-                    await self.client.disconnect()
-                    return
-                await asyncio.sleep(2)
-                print(f"\n{WHITE}🔍 Switch vers : {CYAN}{next_acc}{RESET}", flush=True)
-                self.last_sent_msg = "Tiktok"
-                await self.send_bot_command("TikTok")
+                
+                # Extraire le nombre de warnings
+                warning_match = re.search(r"count of warnings is (\d+)", text)
+                warning_count = int(warning_match.group(1)) if warning_match else 0
+                
+                # ⚠️ Seulement si warnings >= 6
+                if warning_count >= 6 or warning_match is None:
+                    print(f"{YELLOW}⚠️ Compte à réparer ({warning_count} warnings) : passage au suivant.{RESET}", flush=True)
+                    self.get_next_active_index()
+                    next_acc = self.accounts[self.index]
+                    if next_acc in self.paused_accounts:
+                        await self.client.disconnect()
+                        return
+                    await asyncio.sleep(2)
+                    print(f"\n{WHITE}🔍 Switch vers : {CYAN}{next_acc}{RESET}", flush=True)
+                    self.last_sent_msg = "TikTok"
+                    await self.send_bot_command("TikTok")
+                else:
+                    # Warnings faibles (< 6) : on continue sur ce compte
+                    print(f"{CYAN}ℹ️ Warnings faibles ({warning_count}/6) sur ce compte. On continue...{RESET}")
+                    self.last_sent_msg = "TikTok"
+                    await self.send_bot_command("TikTok")
+
         # ==========================================
         # --- AJOUTS POUR LES PROBLÈMES 2 ET 3 ---
         # ==========================================
@@ -768,7 +834,7 @@ votre limite de CashCoin.
 ██║ ╚═╝ ██║██║╚██████╗██║  ██║
 ╚═╝     ╚═╝╚═╝ ╚═════╝╚═╝  ╚═╝{RESET}
 {DIM}━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━{RESET}
-{WHITE}🤖 BOT AUTOMATION V3.0 (autoconnect) {DIM}|{RESET} {CYAN}BY MICH{RESET}
+{WHITE}🤖 BOT AUTOMATION V3.1 (autoconnect) {DIM}|{RESET} {CYAN}BY MICH{RESET}
 {DIM}━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━{RESET}
  👤 User          : {user_info}
  💳 CashCoin (DB) : {db_cash}
