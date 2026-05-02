@@ -803,13 +803,7 @@ votre limite de CashCoin.
             await self.send_bot_command("TikTok")
             return # On s'arrête là, le bot Telegram va envoyer les boutons VIP
 
-        # PROBLÈME 3 : Blocage sur le menu des comptes
-        elif "Please choose account from the list" in text:
-            print(f"{YELLOW}🔄 Blocage sur le menu compte. Retour en arrière forcé...{RESET}")
-            await self.send_bot_command("🔙Back")
-            await asyncio.sleep(2)
-            await self.send_bot_command("TikTok")
-            return
+       
 
     # ---------- MENU PRINCIPAL ----------
     async def menu(self):
@@ -834,7 +828,7 @@ votre limite de CashCoin.
 ██║ ╚═╝ ██║██║╚██████╗██║  ██║
 ╚═╝     ╚═╝╚═╝ ╚═════╝╚═╝  ╚═╝{RESET}
 {DIM}━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━{RESET}
-{WHITE}🤖 BOT AUTOMATION V3.1 (autoconnect) {DIM}|{RESET} {CYAN}BY MICH{RESET}
+{WHITE}🤖 BOT AUTOMATION V3.2 (autoconnect) {DIM}|{RESET} {CYAN}BY MICH{RESET}
 {DIM}━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━{RESET}
  👤 User          : {user_info}
  💳 CashCoin (DB) : {db_cash}
