@@ -759,30 +759,17 @@ votre limite de CashCoin.
 
         
         # --- 5. COMPTE A RÉPARER ---
-        elif "warnings" in text or "too" in text:
-            if text and len(text.strip()) > 0:
-                
-                # Extraire le nombre de warnings
-                warning_match = re.search(r"count of warnings is (\d+)", text)
-                warning_count = int(warning_match.group(1)) if warning_match else 0
-                
-                # ⚠️ Seulement si warnings >= 6
-                if warning_count >= 6 or warning_match is None:
-                    print(f"{YELLOW}⚠️ Compte à réparer ({warning_count} warnings) : passage au suivant.{RESET}", flush=True)
-                    self.get_next_active_index()
-                    next_acc = self.accounts[self.index]
-                    if next_acc in self.paused_accounts:
-                        await self.client.disconnect()
-                        return
-                    await asyncio.sleep(2)
-                    print(f"\n{WHITE}🔍 Switch vers : {CYAN}{next_acc}{RESET}", flush=True)
-                    self.last_sent_msg = "TikTok"
-                    await self.send_bot_command("TikTok")
-                else:
-                    # Warnings faibles (< 6) : on continue sur ce compte
-                    print(f"{CYAN}ℹ️ Warnings faibles ({warning_count}/6) sur ce compte. On continue...{RESET}")
-                    self.last_sent_msg = "TikTok"
-                    await self.send_bot_command("TikTok")
+        elif "🔴 Account" in text or "too" in text:
+            print(f"{YELLOW}⚠️ Compte à réparer ({warning_count} warnings) : passage au suivant.{RESET}", flush=True)
+            self.get_next_active_index()
+            next_acc = self.accounts[self.index]
+            if next_acc in self.paused_accounts:
+                await self.client.disconnect()
+                return
+            await asyncio.sleep(2)
+            print(f"\n{WHITE}🔍 Switch vers : {CYAN}{next_acc}{RESET}", flush=True)
+            self.last_sent_msg = "TikTok"
+            await self.send_bot_command("TikTok")
 
         # ==========================================
         # --- AJOUTS POUR LES PROBLÈMES 2 ET 3 ---
@@ -828,7 +815,7 @@ votre limite de CashCoin.
 ██║ ╚═╝ ██║██║╚██████╗██║  ██║
 ╚═╝     ╚═╝╚═╝ ╚═════╝╚═╝  ╚═╝{RESET}
 {DIM}━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━{RESET}
-{WHITE}🤖 BOT AUTOMATION V3.2 (autoconnect) {DIM}|{RESET} {CYAN}BY MICH{RESET}
+{WHITE}🤖 BOT AUTOMATION V3.3 (autoconnect) {DIM}|{RESET} {CYAN}BY MICH{RESET}
 {DIM}━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━{RESET}
  👤 User          : {user_info}
  💳 CashCoin (DB) : {db_cash}
