@@ -338,44 +338,47 @@ votre limite de CashCoin.
     # ---------- HELPER COMMENTAIRE ----------
     def _write_comment_adbkeyboard(self, text: str) -> bool:
         """
-        Écrit du texte via AdbKeyboard (sans passer par le clipboard).
-        Retourne True si l'écriture semble avoir réussi.
+        Écrit du texte via AdbKeyboard avec un échappement renforcé.
         """
-        # 1. Forcer AdbKeyboard comme IME actif
+        # 1. Forcer AdbKeyboard
         os.system(f"{self.adb} ime set com.qwerty.adbkeyboard/.AdbIME 2>/dev/null")
         time.sleep(0.3)
 
-        # 2. Vider le champ (Ctrl+A puis Delete) pour éviter les restes du clipboard
+        # 2. Vider le champ
         os.system(f"{self.adb} input keyevent KEYCODE_CTRL_A")
-        time.sleep(0.2)
+        time.sleep(0.1)
         os.system(f"{self.adb} input keyevent KEYCODE_DEL")
-        time.sleep(0.2)
+        time.sleep(0.1)
 
-        # 3. Envoyer le texte via broadcast AdbKeyboard (PAS de clipboard)
-        # On échappe les guillemets pour éviter les injections dans le shell
-        safe_text = text.replace('"', '\\"').replace("'", "\\'").replace("`", "\\`")
-        result = os.system(
-            f'{self.adb} am broadcast -a ADB_INPUT_TEXT --es msg "{safe_text}"'
-        )
-        time.sleep(0.5)
+        # 3. Envoyer le texte
+        # La clé est de mettre des guillemets simples AUTOUR des guillemets doubles 
+        # pour que le shell Android reçoive bien la chaîne entière.
+        # On remplace aussi les éventuels guillemets simples dans le texte pour ne pas casser la commande.
+        text_for_adb = text.replace("'", "") 
+        
+        # Commande modifiée : on entoure le message de '%s' pour AdbKeyboard
+        cmd = f"{self.adb} am broadcast -a ADB_INPUT_TEXT --es msg \"{text_for_adb}\""
+        
+        print(f"{CYAN}    [ADB] Envoi broadcast...{RESET}")
+        result = os.system(cmd)
+        time.sleep(0.8) # Un peu plus de temps pour les textes longs
 
-        # 4. Vérification : le champ est-il rempli ?
+        # 4. Vérification
         try:
-            field_text = self.d(className="android.widget.EditText").get_text(timeout=3)
+            field_text = self.d(className="android.widget.EditText").get_text(timeout=2)
             if field_text and len(field_text.strip()) > 0:
-                print(f"{GREEN}    -> AdbKeyboard OK : '{field_text[:30]}...'{RESET}")
+                print(f"{GREEN}    -> AdbKeyboard OK{RESET}")
                 return True
         except:
             pass
 
-        # 5. Fallback : set_text() UI2 si AdbKeyboard a échoué
-        print(f"{YELLOW}    -> AdbKeyboard broadcast raté, fallback set_text...{RESET}")
+        # 5. Fallback
+        print(f"{YELLOW}    -> Fallback set_text...{RESET}")
         try:
             self.d(className="android.widget.EditText").set_text(text)
-            time.sleep(0.5)
             return True
         except Exception as e:
-            print(f"{RED}    -> set_text échoué : {e}{RESET}")
+            print(f"{RED}    -> Erreur fallback : {e}{RESET}")
             return False
 
     # ---------- ACTIONS ----------
@@ -830,7 +833,7 @@ votre limite de CashCoin.
 ██║ ╚═╝ ██║██║╚██████╗██║  ██║
 ╚═╝     ╚═╝╚═╝ ╚═════╝╚═╝  ╚═╝{RESET}
 {DIM}━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━{RESET}
-{WHITE}🤖 BOT AUTOMATION V3.5 (badComm) {DIM}|{RESET} {CYAN}BY MICH{RESET}
+{WHITE}🤖 BOT AUTOMATION V1.0 (badComm) {DIM}|{RESET} {CYAN}BY MICH{RESET}
 {DIM}━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━{RESET}
  👤 User          : {user_info}
  💳 CashCoin (DB) : {db_cash}
