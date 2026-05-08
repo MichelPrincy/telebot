@@ -3,6 +3,7 @@ import json
 import asyncio
 import httpx
 import re
+import base64
 import subprocess
 import time
 import requests
@@ -337,137 +338,53 @@ votre limite de CashCoin.
 
     # ---------- HELPER COMMENTAIRE ----------
     def _write_comment_adbkeyboard(self, text: str) -> bool:
-        import subprocess, urllib.parse
+        adb_parts = self.adb.split() # ["adb", "-s", "device_id"]
     
-        adb_parts = self.adb.split()
+        def adb_cmd(cmd: list):
+            return subprocess.run(adb_parts + cmd, capture_output=True, text=True).stdout.strip()
     
-        def adb(cmd: list, timeout=6) -> str:
-            try:
-                r = subprocess.run(
-                    adb_parts + cmd,
-                    capture_output=True, text=True, timeout=timeout
-                )
-                return r.stdout.strip()
-            except subprocess.TimeoutExpired:
-                print(f"{RED}    [ADB] ⏱️ Timeout : {cmd}{RESET}")
-                return ""
-            except Exception as e:
-                print(f"{RED}    [ADB] Erreur : {e}{RESET}")
-                return ""
-    
-        def get_field_text() -> str:
-            try:
-                t = self.d(className="android.widget.EditText").get_text(timeout=3)
-                return (t or "").strip()
-            except:
-                return ""
-    
-        def refocus_field():
-            """Force le focus sur le champ + active AdbKeyboard."""
-            try:
-                self.d(className="android.widget.EditText").click()
-            except:
-                pass
-            time.sleep(0.4)
-            adb(["shell", "ime", "set", "com.qwerty.adbkeyboard/.AdbIME"])
-            time.sleep(0.3)
-    
-        def clear_field():
-            """Vide le champ de façon agressive."""
-            adb(["shell", "input", "keyevent", "KEYCODE_CTRL_A"])
-            time.sleep(0.1)
-            adb(["shell", "input", "keyevent", "KEYCODE_DEL"])
-            time.sleep(0.15)
-    
-        # ──────────────────────────────────────────
-        # STRATÉGIE 1 : AdbKeyboard broadcast
-        # ──────────────────────────────────────────
-        print(f"{CYAN}    [S1] AdbKeyboard broadcast...{RESET}")
-        refocus_field()
-        clear_field()
-        adb(["shell", "am", "broadcast", "-a", "ADB_INPUT_TEXT",
-             "--es", "msg", text], timeout=8)
-        time.sleep(1.0)
-        if get_field_text():
-            print(f"{GREEN}    ✅ S1 OK : '{get_field_text()}'{RESET}")
-            return True
-    
-        # ──────────────────────────────────────────
-        # STRATÉGIE 2 : Clipboard paste (robuste aux emojis)
-        # ──────────────────────────────────────────
-        print(f"{YELLOW}    [S2] Clipboard paste...{RESET}")
         try:
-            # Copier le texte dans le presse-papier via U2
-            self.d.set_fastinput_ime(False)  # désactive fastinput si actif
-            self.d(className="android.widget.EditText").clear_text()
-            time.sleep(0.2)
+            # 1. Activation forcée de l'IME AdbKeyboard
+            adb_cmd(["shell", "ime", "set", "com.qwerty.adbkeyboard/.AdbIME"])
+            time.sleep(0.5) # Temps de latence pour l'initialisation de l'IME
+    
+            # 2. Nettoyage du champ (Sélectionner tout + Supprimer)
+            # On utilise uiautomator2 pour le focus si possible, sinon ADB
+            adb_cmd(["shell", "input", "keyevent", "KEYCODE_MOVE_END"]) # Fin du texte
+            adb_cmd(["shell", "input", "keyevent", "--longpress", "67"] * 20) # Supprime bcp de caractères
+            # Ou plus radical :
+            adb_cmd(["shell", "input", "keyevent", "KEYCODE_CTRL_A"])
+            adb_cmd(["shell", "input", "keyevent", "KEYCODE_DEL"])
             
-            # Injecter via clipboard Python→ADB
-            escaped = text.replace("'", "\\'").replace('"', '\\"')
-            adb(["shell", "am", "broadcast", "-a", "clipper.set",
-                 "--es", "text", escaped])
-            time.sleep(0.3)
-    
-            refocus_field()
-            clear_field()
-    
-            # PASTE via keyevent
-            adb(["shell", "input", "keyevent", "KEYCODE_CTRL_V"])
-            time.sleep(0.8)
-            if get_field_text():
-                print(f"{GREEN}    ✅ S2 OK (clipboard){RESET}")
-                return True
-        except Exception as e:
-            print(f"{RED}    S2 échouée : {e}{RESET}")
-    
-        # ──────────────────────────────────────────
-        # STRATÉGIE 3 : set_text U2 (sans emojis)
-        # ──────────────────────────────────────────
-        print(f"{YELLOW}    [S3] set_text U2...{RESET}")
-        try:
-            # Supprimer les emojis si nécessaire pour cette stratégie
-            import re
-            safe_text = re.sub(
-                r'[\U00010000-\U0010ffff]',  # plage emojis
-                '', text
-            ).strip() or text  # garde l'original si tout effacé
+            # 3. Envoi en Base64 (C'est le secret de la fiabilité)
+            # AdbKeyboard supporte l'action ADB_INPUT_B64
+            msg_b64 = base64.b64encode(text.encode('utf-8')).decode('utf-8')
+            print(f"    [ADB] Envoi B64 : {text}")
             
+            # On tente l'envoi via broadcast Base64
+            adb_cmd(["shell", "am", "broadcast", "-a", "ADB_INPUT_B64", "--es", "msg", msg_b64])
+            time.sleep(1.0)
+    
+            # 4. Vérification de réussite
             field = self.d(className="android.widget.EditText")
-            field.clear_text()
-            time.sleep(0.2)
-            field.set_text(safe_text)
+            if field.exists:
+                current_text = field.get_text()
+                if current_text and len(current_text) > 0:
+                    return True
+    
+            # 5. ULTIME FALLBACK : Presse-papier (Clipboard)
+            print("    [Fallback] Tentative via Clipboard...")
+            self.d.set_clipboard(text)
             time.sleep(0.5)
-            if get_field_text():
-                print(f"{GREEN}    ✅ S3 OK (set_text){RESET}")
-                return True
+            # Long press pour coller ou CTRL+V
+            field.click() # S'assurer du focus
+            adb_cmd(["shell", "input", "keyevent", "KEYCODE_CTRL_V"])
+            time.sleep(0.5)
+            
+            return len(field.get_text() or "") > 0
+    
         except Exception as e:
-            print(f"{RED}    S3 échouée : {e}{RESET}")
-    
-        # ──────────────────────────────────────────
-        # STRATÉGIE 4 : input text ADB (ASCII only)
-        # ──────────────────────────────────────────
-        print(f"{RED}    [S4] input text ADB (dernier recours)...{RESET}")
-        try:
-            import re
-            # Garder uniquement ASCII imprimable + espaces
-            ascii_text = re.sub(r'[^\x20-\x7E]', '', text).strip()
-            if not ascii_text:
-                ascii_text = "Great video!"
-    
-            refocus_field()
-            clear_field()
-    
-            # Échapper les espaces pour ADB
-            safe = ascii_text.replace(' ', '%s').replace("'", "")
-            adb(["shell", "input", "text", safe])
-            time.sleep(0.6)
-            if get_field_text():
-                print(f"{GREEN}    ✅ S4 OK (input text ASCII){RESET}")
-                return True
-        except Exception as e:
-            print(f"{RED}    S4 échouée : {e}{RESET}")
-    
-        print(f"{RED}    ❌ Toutes les stratégies ont échoué.{RESET}")
+            print(f"    [Erreur Écriture] : {e}")
         return False
     # ---------- ACTIONS ----------
     async def do_task(self, account_idx, link, action, specific_text=None):
@@ -936,7 +853,7 @@ votre limite de CashCoin.
 ██║ ╚═╝ ██║██║╚██████╗██║  ██║
 ╚═╝     ╚═╝╚═╝ ╚═════╝╚═╝  ╚═╝{RESET}
 {DIM}━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━{RESET}
-{WHITE}🤖 BOT AUTOMATION V1.9 (badComm) {DIM}|{RESET} {CYAN}BY MICH{RESET}
+{WHITE}🤖 BOT AUTOMATION V2.0 (badComm) {DIM}|{RESET} {CYAN}BY MICH{RESET}
 {DIM}━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━{RESET}
  👤 User          : {user_info}
  💳 CashCoin (DB) : {db_cash}
