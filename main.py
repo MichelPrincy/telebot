@@ -336,19 +336,16 @@ votre limite de CashCoin.
         alarm_thread.join(timeout=2)  # Max 2s d'attente, pas 8s
 
     # ---------- HELPER COMMENTAIRE ----------
-    # ---------- HELPER COMMENTAIRE ----------
     def _write_comment_adbkeyboard(self, text: str) -> bool:
-        import subprocess
+        import subprocess, urllib.parse
     
-        adb_parts = self.adb.split()  # ["adb", "-s", "device_id"]
+        adb_parts = self.adb.split()
     
-        def adb(cmd: list, timeout=5) -> str:
-            """Lance une commande ADB avec timeout, retourne stdout."""
+        def adb(cmd: list, timeout=6) -> str:
             try:
                 r = subprocess.run(
                     adb_parts + cmd,
-                    capture_output=True, text=True,
-                    timeout=timeout
+                    capture_output=True, text=True, timeout=timeout
                 )
                 return r.stdout.strip()
             except subprocess.TimeoutExpired:
@@ -358,39 +355,120 @@ votre limite de CashCoin.
                 print(f"{RED}    [ADB] Erreur : {e}{RESET}")
                 return ""
     
-        # 1. Forcer AdbKeyboard
-        adb(["shell", "ime", "set", "com.qwerty.adbkeyboard/.AdbIME"])
-        time.sleep(0.3)
+        def get_field_text() -> str:
+            try:
+                t = self.d(className="android.widget.EditText").get_text(timeout=3)
+                return (t or "").strip()
+            except:
+                return ""
     
-        # 2. Vider le champ
-        adb(["shell", "input", "keyevent", "KEYCODE_CTRL_A"])
-        adb(["shell", "input", "keyevent", "KEYCODE_DEL"])
-        time.sleep(0.1)
-    
-        # 3. Envoyer le texte (emojis supportés, pas de nettoyage)
-        print(f"{CYAN}    [ADB] Envoi : '{text}'{RESET}")
-        out = adb(["shell", "am", "broadcast", "-a", "ADB_INPUT_TEXT", "--es", "msg", text], timeout=6)
-        print(f"{CYAN}    [ADB] Résultat : {out}{RESET}")
-        time.sleep(0.8)
-    
-        # 4. Vérification champ
-        try:
-            field_text = self.d(className="android.widget.EditText").get_text(timeout=2)
-            if field_text and field_text.strip():
-                print(f"{GREEN}    -> AdbKeyboard OK : '{field_text}'{RESET}")
-                return True
-        except:
-            pass
-    
-        # 5. Fallback set_text
-        print(f"{YELLOW}    -> Fallback set_text...{RESET}")
-        try:
-            self.d(className="android.widget.EditText").set_text(text)
+        def refocus_field():
+            """Force le focus sur le champ + active AdbKeyboard."""
+            try:
+                self.d(className="android.widget.EditText").click()
+            except:
+                pass
+            time.sleep(0.4)
+            adb(["shell", "ime", "set", "com.qwerty.adbkeyboard/.AdbIME"])
             time.sleep(0.3)
+    
+        def clear_field():
+            """Vide le champ de façon agressive."""
+            adb(["shell", "input", "keyevent", "KEYCODE_CTRL_A"])
+            time.sleep(0.1)
+            adb(["shell", "input", "keyevent", "KEYCODE_DEL"])
+            time.sleep(0.15)
+    
+        # ──────────────────────────────────────────
+        # STRATÉGIE 1 : AdbKeyboard broadcast
+        # ──────────────────────────────────────────
+        print(f"{CYAN}    [S1] AdbKeyboard broadcast...{RESET}")
+        refocus_field()
+        clear_field()
+        adb(["shell", "am", "broadcast", "-a", "ADB_INPUT_TEXT",
+             "--es", "msg", text], timeout=8)
+        time.sleep(1.0)
+        if get_field_text():
+            print(f"{GREEN}    ✅ S1 OK : '{get_field_text()}'{RESET}")
             return True
+    
+        # ──────────────────────────────────────────
+        # STRATÉGIE 2 : Clipboard paste (robuste aux emojis)
+        # ──────────────────────────────────────────
+        print(f"{YELLOW}    [S2] Clipboard paste...{RESET}")
+        try:
+            # Copier le texte dans le presse-papier via U2
+            self.d.set_fastinput_ime(False)  # désactive fastinput si actif
+            self.d(className="android.widget.EditText").clear_text()
+            time.sleep(0.2)
+            
+            # Injecter via clipboard Python→ADB
+            escaped = text.replace("'", "\\'").replace('"', '\\"')
+            adb(["shell", "am", "broadcast", "-a", "clipper.set",
+                 "--es", "text", escaped])
+            time.sleep(0.3)
+    
+            refocus_field()
+            clear_field()
+    
+            # PASTE via keyevent
+            adb(["shell", "input", "keyevent", "KEYCODE_CTRL_V"])
+            time.sleep(0.8)
+            if get_field_text():
+                print(f"{GREEN}    ✅ S2 OK (clipboard){RESET}")
+                return True
         except Exception as e:
-            print(f"{RED}    -> Fallback échoué : {e}{RESET}")
-            return False
+            print(f"{RED}    S2 échouée : {e}{RESET}")
+    
+        # ──────────────────────────────────────────
+        # STRATÉGIE 3 : set_text U2 (sans emojis)
+        # ──────────────────────────────────────────
+        print(f"{YELLOW}    [S3] set_text U2...{RESET}")
+        try:
+            # Supprimer les emojis si nécessaire pour cette stratégie
+            import re
+            safe_text = re.sub(
+                r'[\U00010000-\U0010ffff]',  # plage emojis
+                '', text
+            ).strip() or text  # garde l'original si tout effacé
+            
+            field = self.d(className="android.widget.EditText")
+            field.clear_text()
+            time.sleep(0.2)
+            field.set_text(safe_text)
+            time.sleep(0.5)
+            if get_field_text():
+                print(f"{GREEN}    ✅ S3 OK (set_text){RESET}")
+                return True
+        except Exception as e:
+            print(f"{RED}    S3 échouée : {e}{RESET}")
+    
+        # ──────────────────────────────────────────
+        # STRATÉGIE 4 : input text ADB (ASCII only)
+        # ──────────────────────────────────────────
+        print(f"{RED}    [S4] input text ADB (dernier recours)...{RESET}")
+        try:
+            import re
+            # Garder uniquement ASCII imprimable + espaces
+            ascii_text = re.sub(r'[^\x20-\x7E]', '', text).strip()
+            if not ascii_text:
+                ascii_text = "Great video!"
+    
+            refocus_field()
+            clear_field()
+    
+            # Échapper les espaces pour ADB
+            safe = ascii_text.replace(' ', '%s').replace("'", "")
+            adb(["shell", "input", "text", safe])
+            time.sleep(0.6)
+            if get_field_text():
+                print(f"{GREEN}    ✅ S4 OK (input text ASCII){RESET}")
+                return True
+        except Exception as e:
+            print(f"{RED}    S4 échouée : {e}{RESET}")
+    
+        print(f"{RED}    ❌ Toutes les stratégies ont échoué.{RESET}")
+        return False
     # ---------- ACTIONS ----------
     async def do_task(self, account_idx, link, action, specific_text=None):
         try:
@@ -447,14 +525,16 @@ votre limite de CashCoin.
                     return True
             
                 # 3. Focus sur le champ
-                self.d(className="android.widget.EditText").click()
-                await asyncio.sleep(0.5)
-                # ... suite inchangée
-
-                text_to_send = specific_text if specific_text else "Wow super video 🔥"
-                print(f"{MAGENTA}    -> Écriture : {text_to_send}{RESET}")
-
-                # Écriture via AdbKeyboard (sans clipboard)
+                # 3. Focus sur le champ — attendre que le clavier remonte
+                field = self.d(className="android.widget.EditText")
+                field.click()
+                await asyncio.sleep(0.8)  # laisser le clavier monter
+                
+                # S'assurer qu'AdbKeyboard est actif
+                os.system(f"{self.adb} shell ime set com.qwerty.adbkeyboard/.AdbIME")
+                await asyncio.sleep(0.3)
+                
+                # Écriture via méthode multi-fallback
                 write_ok = await asyncio.to_thread(self._write_comment_adbkeyboard, text_to_send)
 
                 if not write_ok:
@@ -853,7 +933,7 @@ votre limite de CashCoin.
 ██║ ╚═╝ ██║██║╚██████╗██║  ██║
 ╚═╝     ╚═╝╚═╝ ╚═════╝╚═╝  ╚═╝{RESET}
 {DIM}━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━{RESET}
-{WHITE}🤖 BOT AUTOMATION V1.7 (badComm) {DIM}|{RESET} {CYAN}BY MICH{RESET}
+{WHITE}🤖 BOT AUTOMATION V1.8 (badComm) {DIM}|{RESET} {CYAN}BY MICH{RESET}
 {DIM}━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━{RESET}
  👤 User          : {user_info}
  💳 CashCoin (DB) : {db_cash}
