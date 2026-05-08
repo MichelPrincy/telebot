@@ -404,32 +404,42 @@ votre limite de CashCoin.
             action_lower = action.lower()
             
             # --- COMMENTAIRE ---
+            # --- COMMENTAIRE ---
             if "comment" in action_lower:
                 print(f"{MAGENTA}    💬 Mode Commentaire (AdbKeyboard)...{RESET}", flush=True)
-
+            
                 # Reconnexion U2
                 print(f"{YELLOW}🔌 Reconnexion de uiautomator2...{RESET}")
                 try:
                     self.d = u2.connect(self.device_id)
-                    self.d.implicitly_wait(10.0)
+                    self.d.implicitly_wait(5.0)
                     self.d.settings['operation_delay'] = (0.2, 0.2)
                 except Exception as e:
                     print(f"{RED}⚠️ Erreur reconnexion U2 : {e}{RESET}")
-
+            
                 # 1. Ouvrir la section commentaires
-                self.d.click(995, 1263)
-                await asyncio.sleep(3)  # +1s pour les chargements lents
-
+                print(f"{CYAN}    -> Clic sur coordonnée commentaires (995, 1263)...{RESET}")
+                try:
+                    self.d.click(995, 1263)
+                    print(f"{GREEN}    -> Clic U2 OK{RESET}")
+                except Exception as e:
+                    print(f"{YELLOW}    -> Clic U2 échoué ({e}), fallback ADB tap...{RESET}")
+                    os.system(f"{self.adb} input tap 995 1263")
+            
+                await asyncio.sleep(3)
+            
                 # 2. Vérifier que le champ existe (timeout augmenté à 10s)
+                print(f"{CYAN}    -> Vérification champ EditText...{RESET}")
                 if not self.d(className="android.widget.EditText").exists(timeout=10):
                     print(f"{RED}    ❌ Champ texte introuvable après 10s !{RESET}")
                     os.system(f"{self.adb} am force-stop {CLONE_CONTAINER_PACKAGE}")
                     self.focus_termux()
-                    return True  # ← CORRECTIF 1 : ne pas comptabiliser l'échec
-
+                    return True
+            
                 # 3. Focus sur le champ
                 self.d(className="android.widget.EditText").click()
                 await asyncio.sleep(0.5)
+                # ... suite inchangée
 
                 text_to_send = specific_text if specific_text else "Wow super video 🔥"
                 print(f"{MAGENTA}    -> Écriture : {text_to_send}{RESET}")
@@ -833,7 +843,7 @@ votre limite de CashCoin.
 ██║ ╚═╝ ██║██║╚██████╗██║  ██║
 ╚═╝     ╚═╝╚═╝ ╚═════╝╚═╝  ╚═╝{RESET}
 {DIM}━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━{RESET}
-{WHITE}🤖 BOT AUTOMATION V1.1 (badComm) {DIM}|{RESET} {CYAN}BY MICH{RESET}
+{WHITE}🤖 BOT AUTOMATION V1.2 (badComm) {DIM}|{RESET} {CYAN}BY MICH{RESET}
 {DIM}━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━{RESET}
  👤 User          : {user_info}
  💳 CashCoin (DB) : {db_cash}
