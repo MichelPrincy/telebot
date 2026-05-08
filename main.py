@@ -287,166 +287,184 @@ votre limite de CashCoin.
     def focus_termux(self):
         os.system(f"{self.adb} am start --activity-brought-to-front {TERMUX_PACKAGE} > /dev/null 2>&1")
 
-    # ---------- ALARME SONORE ----------
+ # ---------- ALARME SONORE ----------
+    # CORRECTIF 3 : threading.Event au lieu d'un bool → arrêt instantané
     def play_alarm_loop(self):
         """Joue le son ET vibre en boucle"""
         print(f"{RED}{BOLD}🔊 SONNERIE ET VIBRATION ACTIVÉES !{RESET}")
         
-        while self.alarm_active:
-            # 1. Jouer le son avec termux-media-player (votre commande)
+        while not self.alarm_event.is_set():
             if os.path.exists("alarm.mp3"):
                 os.system("mpv alarm.mp3 > /dev/null 2>&1")
             else:
-                os.system(f"{self.adb} input keyevent 24") # Beep volume si pas de mp3
+                os.system(f"{self.adb} input keyevent 24")
             
-            # 2. Vibreur via ADB (votre commande)
-            # On lance 3 vibrations rapides
             os.system(f"{self.adb} cmd vibrator vibrate 1000")
-            time.sleep(4) # Attendre que la vibration finisse
-            
-            # Petite pause avant de recommencer la boucle si le MP3 est court
-            # Si le MP3 est long, termux-media-player rend la main tout de suite, 
-            # donc on peut ajouter un sleep ici pour ne pas spammer la commande play
-            time.sleep(4)
+            # Attente interruptible : vérifie l'event toutes les 0.5s
+            self.alarm_event.wait(timeout=4)
+            if self.alarm_event.is_set():
+                break
+            self.alarm_event.wait(timeout=4)
+
     async def trigger_manual_check(self):
         """Active le volume MEDIA max et lance la boucle de son"""
-        
-        # 1. Monter le volume MEDIA (Stream 3) au maximum
-        # Stream 3 = Musique/Média. On le force à 15 (le max standard sur Android)
         print(f"{YELLOW}🔊 Augmentation du volume MÉDIA...{RESET}")
-        
-        # Méthode 1 : La plus propre (Android 10+)
-        # --stream 3 cible la musique, --set 15 met le volume à fond direct
         os.system(f"{self.adb} cmd media_session volume --stream 3 --set 30")
         
-        # Méthode 2 (Sécurité) : Si la commande du dessus échoue, on utilise l'ancienne méthode
-        # MAIS on lance le son AVANT de monter le volume pour être sûr de cibler le média
-        self.alarm_active = True
-        alarm_thread = threading.Thread(target=self.play_alarm_loop)
+        # CORRECTIF 3 : utiliser un Event plutôt qu'un bool
+        self.alarm_event = threading.Event()
+        alarm_thread = threading.Thread(target=self.play_alarm_loop, daemon=True)
         alarm_thread.start()
         
-        # On attend un tout petit peu que le lecteur audio prenne la priorité
-        await asyncio.sleep(0.5) 
-        
-        # Petite rafale de Volume Up au cas où le "set 15" n'a pas marché
-        for _ in range(5): 
-             os.system(f"{self.adb} input keyevent 24")
+        await asyncio.sleep(0.5)
+        for _ in range(5):
+            os.system(f"{self.adb} input keyevent 24")
 
-        # 3. Attendre l'action de l'utilisateur
         print(f"\n{RED}████████████████████████████████████████{RESET}")
         print(f"{RED}🚨  SECURITY CHECK COMPLEXE DÉTECTÉ !  🚨{RESET}")
         print(f"{YELLOW}👉 Résous le captcha sur ton téléphone.{RESET}")
         print(f"{YELLOW}👉 Une fois fini, appuie sur [ENTRÉE] ici.{RESET}")
         print(f"{RED}████████████████████████████████████████{RESET}\n")
         
-        # Astuce: input() est bloquant
         await asyncio.to_thread(input, f"{BOLD}Appuie sur Entrée pour arrêter l'alarme...{RESET}")
         
-        # 4. Arrêter le son et le player Termux
-        self.alarm_active = False
-        os.system("termux-media-player stop") # Arrêt immédiat du son
+        # CORRECTIF 3 : set() réveille immédiatement le wait() dans la boucle
+        self.alarm_event.set()
+        os.system("termux-media-player stop 2>/dev/null")
+        os.system("pkill -f mpv 2>/dev/null")  # Tuer mpv si en cours
         print(f"{GREEN}✅ Alarme arrêtée. Reprise du script...{RESET}")
-        alarm_thread.join()
-    # ---------- ACTIONS  ----------
+        alarm_thread.join(timeout=2)  # Max 2s d'attente, pas 8s
+
+    # ---------- HELPER COMMENTAIRE ----------
+    def _write_comment_adbkeyboard(self, text: str) -> bool:
+        """
+        Écrit du texte via AdbKeyboard (sans passer par le clipboard).
+        Retourne True si l'écriture semble avoir réussi.
+        """
+        # 1. Forcer AdbKeyboard comme IME actif
+        os.system(f"{self.adb} ime set com.qwerty.adbkeyboard/.AdbIME 2>/dev/null")
+        time.sleep(0.3)
+
+        # 2. Vider le champ (Ctrl+A puis Delete) pour éviter les restes du clipboard
+        os.system(f"{self.adb} input keyevent KEYCODE_CTRL_A")
+        time.sleep(0.2)
+        os.system(f"{self.adb} input keyevent KEYCODE_DEL")
+        time.sleep(0.2)
+
+        # 3. Envoyer le texte via broadcast AdbKeyboard (PAS de clipboard)
+        # On échappe les guillemets pour éviter les injections dans le shell
+        safe_text = text.replace('"', '\\"').replace("'", "\\'").replace("`", "\\`")
+        result = os.system(
+            f'{self.adb} am broadcast -a ADB_INPUT_TEXT --es msg "{safe_text}"'
+        )
+        time.sleep(0.5)
+
+        # 4. Vérification : le champ est-il rempli ?
+        try:
+            field_text = self.d(className="android.widget.EditText").get_text(timeout=3)
+            if field_text and len(field_text.strip()) > 0:
+                print(f"{GREEN}    -> AdbKeyboard OK : '{field_text[:30]}...'{RESET}")
+                return True
+        except:
+            pass
+
+        # 5. Fallback : set_text() UI2 si AdbKeyboard a échoué
+        print(f"{YELLOW}    -> AdbKeyboard broadcast raté, fallback set_text...{RESET}")
+        try:
+            self.d(className="android.widget.EditText").set_text(text)
+            time.sleep(0.5)
+            return True
+        except Exception as e:
+            print(f"{RED}    -> set_text échoué : {e}{RESET}")
+            return False
+
+    # ---------- ACTIONS ----------
     async def do_task(self, account_idx, link, action, specific_text=None):
         try:
             self.cleanup_apps()
             coord_clone = self.dynamic_chooser.get(account_idx, "100 1100")
             
-            # 1. Ouverture ADB
             os.system(f'{self.adb} am start -a android.intent.action.VIEW -d "{link}" -p com.waxmoon.ma.gp > /dev/null 2>&1')
             await asyncio.sleep(4)
             os.system(f"{self.adb} input tap {coord_clone}")
-            await asyncio.sleep(20) # Chargement
+            await asyncio.sleep(20)
 
-            # 2. Refresh
             os.system(f'{self.adb} am start -a android.intent.action.VIEW -d "{link}" -p com.waxmoon.ma.gp > /dev/null 2>&1')
             await asyncio.sleep(3)
             os.system(f"{self.adb} input tap {coord_clone}")
             
-            print(f"{YELLOW}⏳ Attente stricte 6s...{RESET}", flush=True)
+            print(f"{YELLOW}⏳ Attente stricte 10s...{RESET}", flush=True)
             await asyncio.sleep(10)
 
-            # --- LOGIQUE UIAUTOMATOR ---
             FOLLOW_KEYWORDS = ["Suivre", "S'abonner", "Follow", "Seguir"]
             LIKE_DESC_REGEX = "(?i)(like|j'aime|love|gostar|aimer)"
             action_lower = action.lower()
             
             # --- COMMENTAIRE ---
             if "comment" in action_lower:
-                print(f"{MAGENTA}    💬 Mode Commentaire (Stratégie Clavier Fixe)...{RESET}", flush=True)
-                # 👇 NOUVEAU : Reconnexion forcée de UI Automator 2 avant le commentaire
-                print(f"{YELLOW}🔌 Reconnexion de uiautomator2 en cours...{RESET}")
+                print(f"{MAGENTA}    💬 Mode Commentaire (AdbKeyboard)...{RESET}", flush=True)
+
+                # Reconnexion U2
+                print(f"{YELLOW}🔌 Reconnexion de uiautomator2...{RESET}")
                 try:
                     self.d = u2.connect(self.device_id)
                     self.d.implicitly_wait(10.0)
                     self.d.settings['operation_delay'] = (0.2, 0.2)
                 except Exception as e:
-                    print(f"{RED}⚠️ Erreur lors de la reconnexion U2 : {e}{RESET}")
-                # 👆 FIN DU NOUVEAU BLOC
-                
-                # 1. Cliquer sur l'icône commentaire
+                    print(f"{RED}⚠️ Erreur reconnexion U2 : {e}{RESET}")
+
+                # 1. Ouvrir la section commentaires
                 os.system(f"{self.adb} input tap 995 1263")
-                await asyncio.sleep(3)
-            
-                if self.d(className="android.widget.EditText").exists(timeout=5):
-                    # 2. Cliquer sur le champ texte pour s'assurer du focus
-                    self.d(className="android.widget.EditText").click()
-                    await asyncio.sleep(1)
-                    
-                    text_to_send = specific_text if specific_text else "Wow super video 🔥"
-                    print(f"{MAGENTA}    -> Écriture : {text_to_send}{RESET}")
-                    
-                    # Écriture du texte
-                    # Stratégie 1 : clipboard (la plus fiable)
-                    try:
-                        import subprocess
-                        subprocess.run(
-                            f'adb -s {self.device_id} shell am broadcast -a clipper.set -e text "{text_to_send}"',
-                            shell=True
-                        )
-                        # Coller avec CTRL+V via keyevent
-                        os.system(f"{self.adb} input keyevent 279")  # KEYCODE_PASTE
-                        await asyncio.sleep(1)
-                        print(f"{GREEN}    -> Texte collé via clipboard{RESET}")
-                    except:
-                        # Stratégie 2 : send_keys UI2
-                        try:
-                            self.d(className="android.widget.EditText").set_text(text_to_send)
-                        except:
-                            # Stratégie 3 : ADB input text
-                            import base64
-                            b64 = base64.b64encode(text_to_send.encode()).decode()
-                            os.system(f"{self.adb} am broadcast -a ADB_INPUT_B64 --es msg {b64}")
-                    
-                    # Petite pause pour laisser le texte s'afficher
-                    await asyncio.sleep(1)
-            
-                    # --- EXÉCUTION DIRECTE DE LA SUITE ---
-                    # 3. Cliquer sur (575, 554) pour désactiver/réduire le clavier
-                    print(f"{CYAN}    -> Réduction du clavier (clic zone neutre)...{RESET}")
-                    os.system(f"{self.adb} input tap 575 554")
-                    await asyncio.sleep(1.5) 
-            
-                    # 4. Envoyer avec les coordonnées fixes (965, 2095)
-                    print(f"{GREEN}    -> Envoi (Coordonnées fixes : 965, 2095)...{RESET}")
-                    # Chercher le bouton Send par description ou ID
-                    send_btn = self.d(descriptionContains="Send") or \
-                               self.d(resourceIdMatches=".*send.*") or \
-                               self.d(textContains="Post")
-                    
-                    if send_btn.exists(timeout=3):
-                        send_btn.click()
-                    else:
-                        os.system(f"{self.adb} input tap 960 2085")  # fallback coordonnées
-                    
-                    print(f"{GREEN}    -> Commentaire envoyé !{RESET}")
-                    await asyncio.sleep(2)
-                    
-                    # 5. Fermer la fenêtre des commentaires (cliquer en haut)
-                    os.system(f"{self.adb} input tap 500 200") 
+                await asyncio.sleep(4)  # +1s pour les chargements lents
+
+                # 2. Vérifier que le champ existe (timeout augmenté à 10s)
+                if not self.d(className="android.widget.EditText").exists(timeout=10):
+                    print(f"{RED}    ❌ Champ texte introuvable après 10s !{RESET}")
+                    os.system(f"{self.adb} am force-stop {CLONE_CONTAINER_PACKAGE}")
+                    self.focus_termux()
+                    return False  # ← CORRECTIF 1 : ne pas comptabiliser l'échec
+
+                # 3. Focus sur le champ
+                self.d(className="android.widget.EditText").click()
+                await asyncio.sleep(1)
+
+                text_to_send = specific_text if specific_text else "Wow super video 🔥"
+                print(f"{MAGENTA}    -> Écriture : {text_to_send}{RESET}")
+
+                # CORRECTIF 2 : Écriture via AdbKeyboard (sans clipboard)
+                write_ok = await asyncio.to_thread(self._write_comment_adbkeyboard, text_to_send)
+
+                if not write_ok:
+                    print(f"{RED}    ❌ Impossible d'écrire le commentaire.{RESET}")
+                    os.system(f"{self.adb} am force-stop {CLONE_CONTAINER_PACKAGE}")
+                    self.focus_termux()
+                    return False  # ← CORRECTIF 1
+
+                await asyncio.sleep(1)
+
+                # 4. Réduire le clavier
+                print(f"{CYAN}    -> Réduction du clavier...{RESET}")
+                os.system(f"{self.adb} input tap 575 554")
+                await asyncio.sleep(1.5)
+
+                # 5. Envoyer le commentaire
+                print(f"{GREEN}    -> Envoi du commentaire...{RESET}")
+                send_btn = self.d(descriptionContains="Send")
+                if not send_btn.exists(timeout=2):
+                    send_btn = self.d(resourceIdMatches=".*send.*")
+                if not send_btn.exists(timeout=2):
+                    send_btn = self.d(textContains="Post")
+
+                if send_btn.exists(timeout=3):
+                    send_btn.click()
                 else:
-                    print(f"{RED}    ❌ Champ texte introuvable !{RESET}")
+                    os.system(f"{self.adb} input tap 960 2085")
+
+                print(f"{GREEN}    -> Commentaire envoyé !{RESET}")
+                await asyncio.sleep(2)
+
+                # 6. Fermer la section commentaires
+                os.system(f"{self.adb} input tap 500 200")
 
             # --- FOLLOW ---
             elif "follow" in action_lower or "profile" in action_lower:
@@ -458,28 +476,25 @@ votre limite de CashCoin.
                         print(f"{GREEN}    -> Clic sur '{keyword}'{RESET}")
                         clicked = True
                         break
-                
                 if not clicked:
                     if self.d(resourceIdMatches=".*follow_btn.*").exists:
-                         self.d(resourceIdMatches=".*follow_btn.*").click()
-                         print(f"{GREEN}    -> Clic sur Follow (via ID){RESET}")
+                        self.d(resourceIdMatches=".*follow_btn.*").click()
+                        print(f"{GREEN}    -> Clic sur Follow (via ID){RESET}")
                     else:
                         print(f"{RED}    ❌ Bouton Follow introuvable{RESET}")
-            
+
             # --- LIKE ---
             else:
                 print(f"{CYAN}    ❤️  Mode Like...{RESET}", flush=True)
-                self.d.click(0.5, 0.5) 
+                self.d.click(0.5, 0.5)
                 await asyncio.sleep(0.5)
-            
                 liked_success = False
                 if self.d(descriptionMatches=LIKE_DESC_REGEX).exists:
                     self.d(descriptionMatches=LIKE_DESC_REGEX).click()
                     liked_success = True
-                elif not liked_success:
+                if not liked_success:
                     print(f"{MAGENTA}    🚀 Fallback : DOUBLE TAP{RESET}")
-                    self.d.double_click(0.5, 0.5, duration=0.1) 
-                    liked_success = True
+                    self.d.double_click(0.5, 0.5, duration=0.1)
 
             await asyncio.sleep(3)
             os.system(f"{self.adb} am force-stop {CLONE_CONTAINER_PACKAGE}")
@@ -815,7 +830,7 @@ votre limite de CashCoin.
 ██║ ╚═╝ ██║██║╚██████╗██║  ██║
 ╚═╝     ╚═╝╚═╝ ╚═════╝╚═╝  ╚═╝{RESET}
 {DIM}━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━{RESET}
-{WHITE}🤖 BOT AUTOMATION V3.3 (autoconnect) {DIM}|{RESET} {CYAN}BY MICH{RESET}
+{WHITE}🤖 BOT AUTOMATION V3.4 (autoconnect) {DIM}|{RESET} {CYAN}BY MICH{RESET}
 {DIM}━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━{RESET}
  👤 User          : {user_info}
  💳 CashCoin (DB) : {db_cash}
