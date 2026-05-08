@@ -417,8 +417,8 @@ votre limite de CashCoin.
                     print(f"{RED}⚠️ Erreur reconnexion U2 : {e}{RESET}")
 
                 # 1. Ouvrir la section commentaires
-                os.system(f"{self.adb} input tap 995 1263")
-                await asyncio.sleep(4)  # +1s pour les chargements lents
+                self.d.click(995, 1263)
+                await asyncio.sleep(3)  # +1s pour les chargements lents
 
                 # 2. Vérifier que le champ existe (timeout augmenté à 10s)
                 if not self.d(className="android.widget.EditText").exists(timeout=10):
@@ -833,7 +833,7 @@ votre limite de CashCoin.
 ██║ ╚═╝ ██║██║╚██████╗██║  ██║
 ╚═╝     ╚═╝╚═╝ ╚═════╝╚═╝  ╚═╝{RESET}
 {DIM}━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━{RESET}
-{WHITE}🤖 BOT AUTOMATION V1.0 (badComm) {DIM}|{RESET} {CYAN}BY MICH{RESET}
+{WHITE}🤖 BOT AUTOMATION V1.1 (badComm) {DIM}|{RESET} {CYAN}BY MICH{RESET}
 {DIM}━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━{RESET}
  👤 User          : {user_info}
  💳 CashCoin (DB) : {db_cash}
