@@ -337,39 +337,26 @@ votre limite de CashCoin.
 
     # ---------- HELPER COMMENTAIRE ----------
     def _write_comment_adbkeyboard(self, text: str) -> bool:
+        import subprocess
+        import base64
+    
         # 1. Forcer AdbKeyboard
-        os.system(f"{self.adb} ime set com.qwerty.adbkeyboard/.AdbIME 2>/dev/null")
+        adb = self.adb.split()
+        subprocess.run(adb + ["ime", "set", "com.qwerty.adbkeyboard/.AdbIME"], capture_output=True)
         time.sleep(0.3)
     
         # 2. Vider le champ
-        os.system(f"{self.adb} input keyevent KEYCODE_CTRL_A")
+        subprocess.run(adb + ["input", "keyevent", "KEYCODE_CTRL_A"], capture_output=True)
         time.sleep(0.1)
-        os.system(f"{self.adb} input keyevent KEYCODE_DEL")
+        subprocess.run(adb + ["input", "keyevent", "KEYCODE_DEL"], capture_output=True)
         time.sleep(0.1)
     
-        # 3. Envoyer le texte — CORRECTION ÉCHAPPEMENT
-        # On échappe les caractères dangereux pour le shell : ', ", !, $, `, \
-        text_clean = (
-            text
-            .replace("\\", "")   # antislash
-            .replace('"', '')     # guillemet double
-            .replace("'", "")     # guillemet simple
-            .replace("!", "")     # ! casse l'historique bash
-            .replace("$", "")     # $ interprété comme variable
-            .replace("`", "")     # backtick = sous-commande
-        )
+        # 3. Encoder en base64 → supporte TOUT : emojis, accents, guillemets, !$`\
+        b64 = base64.b64encode(text.encode("utf-8")).decode("ascii")
+        cmd = adb + ["am", "broadcast", "-a", "ADB_INPUT_B64", "--es", "msg", b64]
     
-        # Utiliser subprocess pour éviter le shell entièrement
-        import subprocess
-        adb_parts = self.adb.split()  # ["adb", "-s", "device_id"]
-        cmd_parts = adb_parts + [
-            "am", "broadcast",
-            "-a", "ADB_INPUT_TEXT",
-            "--es", "msg", text_clean
-        ]
-    
-        print(f"{CYAN}    [ADB] Envoi broadcast : {text_clean}{RESET}")
-        result = subprocess.run(cmd_parts, capture_output=True, text=True)
+        print(f"{CYAN}    [ADB] Envoi B64 : {text}{RESET}")
+        result = subprocess.run(cmd, capture_output=True, text=True)
         print(f"{CYAN}    [ADB] Résultat : {result.stdout.strip()}{RESET}")
         time.sleep(0.8)
     
@@ -377,12 +364,12 @@ votre limite de CashCoin.
         try:
             field_text = self.d(className="android.widget.EditText").get_text(timeout=2)
             if field_text and len(field_text.strip()) > 0:
-                print(f"{GREEN}    -> AdbKeyboard OK : '{field_text}'{RESET}")
+                print(f"{GREEN}    -> AdbKeyboard B64 OK : '{field_text}'{RESET}")
                 return True
         except:
             pass
     
-        # 5. Fallback
+        # 5. Fallback set_text
         print(f"{YELLOW}    -> Fallback set_text...{RESET}")
         try:
             self.d(className="android.widget.EditText").set_text(text)
@@ -390,7 +377,6 @@ votre limite de CashCoin.
         except Exception as e:
             print(f"{RED}    -> Erreur fallback : {e}{RESET}")
             return False
-
     # ---------- ACTIONS ----------
     async def do_task(self, account_idx, link, action, specific_text=None):
         try:
@@ -853,7 +839,7 @@ votre limite de CashCoin.
 ██║ ╚═╝ ██║██║╚██████╗██║  ██║
 ╚═╝     ╚═╝╚═╝ ╚═════╝╚═╝  ╚═╝{RESET}
 {DIM}━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━{RESET}
-{WHITE}🤖 BOT AUTOMATION V1.5 (badComm) {DIM}|{RESET} {CYAN}BY MICH{RESET}
+{WHITE}🤖 BOT AUTOMATION V1.6 (badComm) {DIM}|{RESET} {CYAN}BY MICH{RESET}
 {DIM}━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━{RESET}
  👤 User          : {user_info}
  💳 CashCoin (DB) : {db_cash}
