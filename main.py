@@ -428,9 +428,9 @@ votre limite de CashCoin.
                     print(f"{RED}⚠️ Erreur reconnexion U2 : {e}{RESET}")
             
                 # 1. Ouvrir la section commentaires
-                print(f"{CYAN}    -> Clic sur coordonnée commentaires (995, 1263)...{RESET}")
+                print(f"{CYAN}    -> Clic sur coordonnée commentaires (995, 1370)...{RESET}")
                 try:
-                    self.d.click(995, 1263)
+                    self.d.click(995, 1370)
                     print(f"{GREEN}    -> Clic U2 OK{RESET}")
                 except Exception as e:
                     print(f"{YELLOW}    -> Clic U2 échoué ({e}), fallback ADB tap...{RESET}")
@@ -853,7 +853,7 @@ votre limite de CashCoin.
 ██║ ╚═╝ ██║██║╚██████╗██║  ██║
 ╚═╝     ╚═╝╚═╝ ╚═════╝╚═╝  ╚═╝{RESET}
 {DIM}━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━{RESET}
-{WHITE}🤖 BOT AUTOMATION V1.4 (badComm) {DIM}|{RESET} {CYAN}BY MICH{RESET}
+{WHITE}🤖 BOT AUTOMATION V1.5 (badComm) {DIM}|{RESET} {CYAN}BY MICH{RESET}
 {DIM}━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━{RESET}
  👤 User          : {user_info}
  💳 CashCoin (DB) : {db_cash}
