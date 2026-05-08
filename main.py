@@ -434,7 +434,7 @@ votre limite de CashCoin.
                     print(f"{GREEN}    -> Clic U2 OK{RESET}")
                 except Exception as e:
                     print(f"{YELLOW}    -> Clic U2 échoué ({e}), fallback ADB tap...{RESET}")
-                    os.system(f"{self.adb} input tap 995 1263")
+                    os.system(f"{self.adb} input tap 990 1380")
             
                 await asyncio.sleep(3)
             
@@ -853,7 +853,7 @@ votre limite de CashCoin.
 ██║ ╚═╝ ██║██║╚██████╗██║  ██║
 ╚═╝     ╚═╝╚═╝ ╚═════╝╚═╝  ╚═╝{RESET}
 {DIM}━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━{RESET}
-{WHITE}🤖 BOT AUTOMATION V1.3 (badComm) {DIM}|{RESET} {CYAN}BY MICH{RESET}
+{WHITE}🤖 BOT AUTOMATION V1.4 (badComm) {DIM}|{RESET} {CYAN}BY MICH{RESET}
 {DIM}━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━{RESET}
  👤 User          : {user_info}
  💳 CashCoin (DB) : {db_cash}
