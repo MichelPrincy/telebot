@@ -385,16 +385,16 @@ votre limite de CashCoin.
             coord_clone = self.dynamic_chooser.get(account_idx, "100 1100")
             
             os.system(f'{self.adb} am start -a android.intent.action.VIEW -d "{link}" -p com.waxmoon.ma.gp > /dev/null 2>&1')
-            await asyncio.sleep(4)
-            os.system(f"{self.adb} input tap {coord_clone}")
-            await asyncio.sleep(20)
-
-            os.system(f'{self.adb} am start -a android.intent.action.VIEW -d "{link}" -p com.waxmoon.ma.gp > /dev/null 2>&1')
             await asyncio.sleep(3)
             os.system(f"{self.adb} input tap {coord_clone}")
+            await asyncio.sleep(12)  # 20s → 12s
+
+            os.system(f'{self.adb} am start -a android.intent.action.VIEW -d "{link}" -p com.waxmoon.ma.gp > /dev/null 2>&1')
+            await asyncio.sleep(2)
+            os.system(f"{self.adb} input tap {coord_clone}")
             
-            print(f"{YELLOW}⏳ Attente stricte 10s...{RESET}", flush=True)
-            await asyncio.sleep(10)
+            print(f"{YELLOW}⏳ Attente chargement...{RESET}", flush=True)
+            await asyncio.sleep(6)  # 10s → 6s
 
             FOLLOW_KEYWORDS = ["Suivre", "S'abonner", "Follow", "Seguir"]
             LIKE_DESC_REGEX = "(?i)(like|j'aime|love|gostar|aimer)"
@@ -422,30 +422,30 @@ votre limite de CashCoin.
                     print(f"{RED}    ❌ Champ texte introuvable après 10s !{RESET}")
                     os.system(f"{self.adb} am force-stop {CLONE_CONTAINER_PACKAGE}")
                     self.focus_termux()
-                    return False  # ← CORRECTIF 1 : ne pas comptabiliser l'échec
+                    return True  # ← CORRECTIF 1 : ne pas comptabiliser l'échec
 
                 # 3. Focus sur le champ
                 self.d(className="android.widget.EditText").click()
-                await asyncio.sleep(1)
+                await asyncio.sleep(0.5)
 
                 text_to_send = specific_text if specific_text else "Wow super video 🔥"
                 print(f"{MAGENTA}    -> Écriture : {text_to_send}{RESET}")
 
-                # CORRECTIF 2 : Écriture via AdbKeyboard (sans clipboard)
+                # Écriture via AdbKeyboard (sans clipboard)
                 write_ok = await asyncio.to_thread(self._write_comment_adbkeyboard, text_to_send)
 
                 if not write_ok:
                     print(f"{RED}    ❌ Impossible d'écrire le commentaire.{RESET}")
                     os.system(f"{self.adb} am force-stop {CLONE_CONTAINER_PACKAGE}")
                     self.focus_termux()
-                    return False  # ← CORRECTIF 1
+                    return False
 
-                await asyncio.sleep(1)
+                await asyncio.sleep(0.5)  # 1s → 0.5s
 
                 # 4. Réduire le clavier
                 print(f"{CYAN}    -> Réduction du clavier...{RESET}")
                 os.system(f"{self.adb} input tap 575 554")
-                await asyncio.sleep(1.5)
+                await asyncio.sleep(1)  # 1.5s → 1s
 
                 # 5. Envoyer le commentaire
                 print(f"{GREEN}    -> Envoi du commentaire...{RESET}")
@@ -455,13 +455,13 @@ votre limite de CashCoin.
                 if not send_btn.exists(timeout=2):
                     send_btn = self.d(textContains="Post")
 
-                if send_btn.exists(timeout=3):
+                if send_btn.exists(timeout=2):  # 3s → 2s
                     send_btn.click()
                 else:
                     os.system(f"{self.adb} input tap 960 2085")
 
                 print(f"{GREEN}    -> Commentaire envoyé !{RESET}")
-                await asyncio.sleep(2)
+                await asyncio.sleep(1.5)  # 2s → 1.5s
 
                 # 6. Fermer la section commentaires
                 os.system(f"{self.adb} input tap 500 200")
@@ -830,7 +830,7 @@ votre limite de CashCoin.
 ██║ ╚═╝ ██║██║╚██████╗██║  ██║
 ╚═╝     ╚═╝╚═╝ ╚═════╝╚═╝  ╚═╝{RESET}
 {DIM}━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━{RESET}
-{WHITE}🤖 BOT AUTOMATION V3.4 (autoconnect) {DIM}|{RESET} {CYAN}BY MICH{RESET}
+{WHITE}🤖 BOT AUTOMATION V3.5 (autoconnect) {DIM}|{RESET} {CYAN}BY MICH{RESET}
 {DIM}━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━{RESET}
  👤 User          : {user_info}
  💳 CashCoin (DB) : {db_cash}
