@@ -387,14 +387,14 @@ votre limite de CashCoin.
             os.system(f'{self.adb} am start -a android.intent.action.VIEW -d "{link}" -p com.waxmoon.ma.gp > /dev/null 2>&1')
             await asyncio.sleep(4)
             os.system(f"{self.adb} input tap {coord_clone}")
-            await asyncio.sleep(12)  # 20s → 12s
+            await asyncio.sleep(16)  # 20s → 12s
 
             os.system(f'{self.adb} am start -a android.intent.action.VIEW -d "{link}" -p com.waxmoon.ma.gp > /dev/null 2>&1')
             await asyncio.sleep(3)
             os.system(f"{self.adb} input tap {coord_clone}")
             
             print(f"{YELLOW}⏳ Attente chargement...{RESET}", flush=True)
-            await asyncio.sleep(10)  # 10s → 6s
+            await asyncio.sleep(6)  # 10s → 6s
 
             FOLLOW_KEYWORDS = ["Suivre", "S'abonner", "Follow", "Seguir"]
             LIKE_DESC_REGEX = "(?i)(like|j'aime|love|gostar|aimer)"
@@ -830,7 +830,7 @@ votre limite de CashCoin.
 ██║ ╚═╝ ██║██║╚██████╗██║  ██║
 ╚═╝     ╚═╝╚═╝ ╚═════╝╚═╝  ╚═╝{RESET}
 {DIM}━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━{RESET}
-{WHITE}🤖 BOT AUTOMATION V3.5 (preFonc) {DIM}|{RESET} {CYAN}BY MICH{RESET}
+{WHITE}🤖 BOT AUTOMATION V3.5 (badComm) {DIM}|{RESET} {CYAN}BY MICH{RESET}
 {DIM}━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━{RESET}
  👤 User          : {user_info}
  💳 CashCoin (DB) : {db_cash}
