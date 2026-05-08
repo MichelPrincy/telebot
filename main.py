@@ -534,6 +534,9 @@ votre limite de CashCoin.
                 os.system(f"{self.adb} shell ime set com.qwerty.adbkeyboard/.AdbIME")
                 await asyncio.sleep(0.3)
                 
+                text_to_send = specific_text if specific_text else "Wow super video 🔥"
+                print(f"{MAGENTA}    -> Écriture : {text_to_send}{RESET}")
+                
                 # Écriture via méthode multi-fallback
                 write_ok = await asyncio.to_thread(self._write_comment_adbkeyboard, text_to_send)
 
@@ -933,7 +936,7 @@ votre limite de CashCoin.
 ██║ ╚═╝ ██║██║╚██████╗██║  ██║
 ╚═╝     ╚═╝╚═╝ ╚═════╝╚═╝  ╚═╝{RESET}
 {DIM}━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━{RESET}
-{WHITE}🤖 BOT AUTOMATION V1.8 (badComm) {DIM}|{RESET} {CYAN}BY MICH{RESET}
+{WHITE}🤖 BOT AUTOMATION V1.9 (badComm) {DIM}|{RESET} {CYAN}BY MICH{RESET}
 {DIM}━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━{RESET}
  👤 User          : {user_info}
  💳 CashCoin (DB) : {db_cash}
