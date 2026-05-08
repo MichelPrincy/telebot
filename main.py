@@ -337,49 +337,59 @@ votre limite de CashCoin.
 
     # ---------- HELPER COMMENTAIRE ----------
     def _write_comment_adbkeyboard(self, text: str) -> bool:
-        """
-        Écrit du texte via AdbKeyboard avec un échappement renforcé.
-        """
-        # 1. Forcer AdbKeyboard
-        os.system(f"{self.adb} ime set com.qwerty.adbkeyboard/.AdbIME 2>/dev/null")
-        time.sleep(0.3)
+    # 1. Forcer AdbKeyboard
+    os.system(f"{self.adb} ime set com.qwerty.adbkeyboard/.AdbIME 2>/dev/null")
+    time.sleep(0.3)
 
-        # 2. Vider le champ
-        os.system(f"{self.adb} input keyevent KEYCODE_CTRL_A")
-        time.sleep(0.1)
-        os.system(f"{self.adb} input keyevent KEYCODE_DEL")
-        time.sleep(0.1)
+    # 2. Vider le champ
+    os.system(f"{self.adb} input keyevent KEYCODE_CTRL_A")
+    time.sleep(0.1)
+    os.system(f"{self.adb} input keyevent KEYCODE_DEL")
+    time.sleep(0.1)
 
-        # 3. Envoyer le texte
-        # La clé est de mettre des guillemets simples AUTOUR des guillemets doubles 
-        # pour que le shell Android reçoive bien la chaîne entière.
-        # On remplace aussi les éventuels guillemets simples dans le texte pour ne pas casser la commande.
-        text_for_adb = text.replace("'", "") 
-        
-        # Commande modifiée : on entoure le message de '%s' pour AdbKeyboard
-        cmd = f"{self.adb} am broadcast -a ADB_INPUT_TEXT --es msg \"{text_for_adb}\""
-        
-        print(f"{CYAN}    [ADB] Envoi broadcast...{RESET}")
-        result = os.system(cmd)
-        time.sleep(0.8) # Un peu plus de temps pour les textes longs
+    # 3. Envoyer le texte — CORRECTION ÉCHAPPEMENT
+    # On échappe les caractères dangereux pour le shell : ', ", !, $, `, \
+    text_clean = (
+        text
+        .replace("\\", "")   # antislash
+        .replace('"', '')     # guillemet double
+        .replace("'", "")     # guillemet simple
+        .replace("!", "")     # ! casse l'historique bash
+        .replace("$", "")     # $ interprété comme variable
+        .replace("`", "")     # backtick = sous-commande
+    )
 
-        # 4. Vérification
-        try:
-            field_text = self.d(className="android.widget.EditText").get_text(timeout=2)
-            if field_text and len(field_text.strip()) > 0:
-                print(f"{GREEN}    -> AdbKeyboard OK{RESET}")
-                return True
-        except:
-            pass
+    # Utiliser subprocess pour éviter le shell entièrement
+    import subprocess
+    adb_parts = self.adb.split()  # ["adb", "-s", "device_id"]
+    cmd_parts = adb_parts + [
+        "am", "broadcast",
+        "-a", "ADB_INPUT_TEXT",
+        "--es", "msg", text_clean
+    ]
 
-        # 5. Fallback
-        print(f"{YELLOW}    -> Fallback set_text...{RESET}")
-        try:
-            self.d(className="android.widget.EditText").set_text(text)
+    print(f"{CYAN}    [ADB] Envoi broadcast : {text_clean}{RESET}")
+    result = subprocess.run(cmd_parts, capture_output=True, text=True)
+    print(f"{CYAN}    [ADB] Résultat : {result.stdout.strip()}{RESET}")
+    time.sleep(0.8)
+
+    # 4. Vérification
+    try:
+        field_text = self.d(className="android.widget.EditText").get_text(timeout=2)
+        if field_text and len(field_text.strip()) > 0:
+            print(f"{GREEN}    -> AdbKeyboard OK : '{field_text}'{RESET}")
             return True
-        except Exception as e:
-            print(f"{RED}    -> Erreur fallback : {e}{RESET}")
-            return False
+    except:
+        pass
+
+    # 5. Fallback
+    print(f"{YELLOW}    -> Fallback set_text...{RESET}")
+    try:
+        self.d(className="android.widget.EditText").set_text(text)
+        return True
+    except Exception as e:
+        print(f"{RED}    -> Erreur fallback : {e}{RESET}")
+        return False
 
     # ---------- ACTIONS ----------
     async def do_task(self, account_idx, link, action, specific_text=None):
@@ -843,7 +853,7 @@ votre limite de CashCoin.
 ██║ ╚═╝ ██║██║╚██████╗██║  ██║
 ╚═╝     ╚═╝╚═╝ ╚═════╝╚═╝  ╚═╝{RESET}
 {DIM}━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━{RESET}
-{WHITE}🤖 BOT AUTOMATION V1.2 (badComm) {DIM}|{RESET} {CYAN}BY MICH{RESET}
+{WHITE}🤖 BOT AUTOMATION V1.3 (badComm) {DIM}|{RESET} {CYAN}BY MICH{RESET}
 {DIM}━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━{RESET}
  👤 User          : {user_info}
  💳 CashCoin (DB) : {db_cash}
