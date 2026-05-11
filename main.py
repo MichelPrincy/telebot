@@ -360,31 +360,57 @@ votre limite de CashCoin.
             action_lower = action.lower()
             
             # --- COMMENTAIRE ---
+            # --- COMMENTAIRE ---
             if "comment" in action_lower:
-            
                 print(f"{MAGENTA}💬 Mode commentaire robuste...{RESET}")
             
                 import subprocess
                 import base64
             
                 # =========================
-                # 1. Reconnexion UI2
+                # 0. RECONNEXION COMPLÈTE
                 # =========================
+                print(f"{CYAN}🔌 Reconnexion ADB + UI2...{RESET}")
+                
+                # Re-scan ADB
+                try:
+                    out = subprocess.check_output(["adb", "devices"]).decode()
+                    for line in out.splitlines():
+                        if "\tdevice" in line:
+                            self.device_id = line.split("\t")[0]
+                            self.adb = f"adb -s {self.device_id} shell"
+                            print(f"{GREEN}✅ ADB reconnecté : {self.device_id}{RESET}")
+                            break
+                except Exception as e:
+                    print(f"{RED}⚠️ Erreur ADB re-scan : {e}{RESET}")
+            
+                # Reconnexion uiautomator2
                 try:
                     self.d = u2.connect(self.device_id)
                     self.d.implicitly_wait(10.0)
+                    self.d.settings['operation_delay'] = (0.2, 0.2)
+                    print(f"{GREEN}✅ UI2 reconnecté{RESET}")
                 except Exception as e:
-                    print(f"{RED}Erreur U2 : {e}{RESET}")
+                    print(f"{RED}Erreur U2 reconnexion : {e}{RESET}")
+                    return True
+            
+                # Vérifier que le device répond bien
+                try:
+                    _ = self.d.info
+                    print(f"{GREEN}✅ Device UI2 OK{RESET}")
+                except Exception as e:
+                    print(f"{RED}Device UI2 ne répond pas : {e}{RESET}")
                     return True
             
                 # =========================
-                # 2. Ouvrir commentaires
+                # 1. Ouvrir section commentaires
                 # =========================
+                print(f"{CYAN}💬 Ouverture section commentaires...{RESET}")
                 os.system(f"{self.adb} input tap 995 1370")
                 await asyncio.sleep(3)
             
                 # =========================
-                # 3. Chercher champ texte
+                # 2. Chercher champ texte
                 # =========================
                 field = self.d(className="android.widget.EditText")
             
@@ -393,193 +419,137 @@ votre limite de CashCoin.
                     return True
             
                 # =========================
-                # 4. Activer AdbKeyboard
+                # 3. Activer AdbKeyboard
                 # =========================
-                os.system(
-                    f"{self.adb} shell ime set com.android.adbkeyboard/.AdbIME"
-                )
-            
+                os.system(f"{self.adb} ime set com.android.adbkeyboard/.AdbIME")
                 await asyncio.sleep(1)
             
                 # =========================
-                # 5. Focus ULTRA ROBUSTE
+                # 4. CLIC sur zone d'écriture (double clic pour focus garanti)
                 # =========================
+                print(f"{CYAN}✏️  Focus sur la zone d'écriture...{RESET}")
                 try:
                     field.click()
                     await asyncio.sleep(1)
-            
-                    # double click souvent nécessaire TikTok
                     field.click()
                     await asyncio.sleep(1)
-            
                 except:
                     os.system(f"{self.adb} input tap 320 2140")
-                    await asyncio.sleep(1.5)
+                    await asyncio.sleep(1)
+                    os.system(f"{self.adb} input tap 320 2140")
+                    await asyncio.sleep(1)
             
-                # =========================
-                # 6. Vérifier focus réel
-                # =========================
+                # Vérifier focus réel
                 focused = self.d(focused=True)
-            
                 if not focused.exists:
                     print(f"{YELLOW}Focus non détecté -> tap fallback{RESET}")
-            
                     os.system(f"{self.adb} input tap 320 2140")
                     await asyncio.sleep(1.5)
             
                 # =========================
-                # 7. Texte à envoyer
+                # 5. Texte à envoyer
                 # =========================
                 text_to_send = (
                     specific_text
                     if specific_text
                     else "Wow super video 🔥"
                 )
-            
                 print(f"{CYAN}Texte : {text_to_send}{RESET}")
             
                 success = False
             
-                # ==================================================
-                # STRATEGIE 1 : ADB_INPUT_B64 (MEILLEURE)
-                # ==================================================
+                # STRATEGIE 1 : ADB_INPUT_B64
                 try:
-            
-                    b64 = base64.b64encode(
-                        text_to_send.encode("utf-8")
-                    ).decode()
-            
+                    b64 = base64.b64encode(text_to_send.encode("utf-8")).decode()
                     cmd = (
                         f'{self.adb} am broadcast '
                         f'-a ADB_INPUT_B64 '
                         f'--es msg "{b64}"'
                     )
-            
-                    result = subprocess.run(
-                        cmd,
-                        shell=True,
-                        capture_output=True,
-                        text=True
-                    )
-            
+                    result = subprocess.run(cmd, shell=True, capture_output=True, text=True)
                     print(result.stdout)
-            
                     await asyncio.sleep(2)
-            
                     success = True
-            
                     print(f"{GREEN}ADB_INPUT_B64 OK{RESET}")
-            
                 except Exception as e:
                     print(f"{YELLOW}B64 erreur : {e}{RESET}")
             
-                # ==================================================
                 # STRATEGIE 2 : ADB_INPUT_TEXT
-                # ==================================================
                 if not success:
-            
                     try:
-            
-                        clean_text = (
-                            text_to_send
-                            .replace(" ", "%s")
-                            .replace("&", "\\&")
-                        )
-            
+                        clean_text = text_to_send.replace(" ", "%s").replace("&", "\\&")
                         cmd = (
                             f'{self.adb} am broadcast '
                             f'-a ADB_INPUT_TEXT '
                             f'--es msg "{clean_text}"'
                         )
-            
-                        subprocess.run(
-                            cmd,
-                            shell=True
-                        )
-            
+                        subprocess.run(cmd, shell=True)
                         await asyncio.sleep(2)
-            
                         success = True
-            
                         print(f"{GREEN}ADB_INPUT_TEXT OK{RESET}")
-            
                     except Exception as e:
                         print(f"{YELLOW}TEXT erreur : {e}{RESET}")
             
-                # ==================================================
                 # STRATEGIE 3 : set_text
-                # ==================================================
                 if not success:
-            
                     try:
-            
-                        ascii_text = text_to_send.encode(
-                            "ascii",
-                            errors="ignore"
-                        ).decode()
-            
+                        ascii_text = text_to_send.encode("ascii", errors="ignore").decode()
                         field.set_text(ascii_text)
-            
                         await asyncio.sleep(1.5)
-            
                         success = True
-            
                         print(f"{GREEN}set_text OK{RESET}")
-            
                     except Exception as e:
                         print(f"{RED}set_text erreur : {e}{RESET}")
             
-                # =========================
-                # 8. Vérification finale
-                # =========================
+                # Vérification du texte écrit
                 try:
-            
                     current_text = field.get_text()
-            
                     print(f"{CYAN}Champ actuel : {current_text}{RESET}")
-            
                     if not current_text.strip():
-            
                         print(f"{RED}Le texte n'a PAS été écrit{RESET}")
                         return True
-            
                 except:
                     print(f"{YELLOW}Impossible lire le champ{RESET}")
             
-                # ==================================================
-                # 9. Fermeture du clavier (Touche Retour)
-                # ==================================================
-                print(f"{CYAN}Fermeture du clavier pour libérer l'écran...{RESET}")
-                self.d.press("back") 
-                
-                # On laisse un petit délai pour que l'animation de descente 
-                # du clavier soit terminée, sinon le clic tape dans le vide.
+                # =========================
+                # 6. Réduction du clavier
+                # =========================
+                print(f"{CYAN}⌨️  Fermeture du clavier...{RESET}")
+                self.d.press("back")
                 await asyncio.sleep(1.5)
-                
-                # ==================================================
-                # 10. Clic sur le bouton Envoyer avec self.d
-                # ==================================================
-                print(f"{GREEN}Tentative d'envoi aux coordonnées (960, 2085)...{RESET}")
-                
+            
+                # =========================
+                # 7. CLIC ENVOYER #1
+                # =========================
+                print(f"{GREEN}📤 Clic ENVOYER #1 sur (960, 2085)...{RESET}")
                 try:
-                    # Utilisation de self.d pour un clic plus précis qu'ADB brut
                     self.d.click(960, 2085)
-                    print(f"{GREEN}Clic effectué avec succès ✓{RESET}")
-                    
+                    print(f"{GREEN}✅ Clic #1 effectué{RESET}")
                 except Exception as e:
-                    print(f"{RED}Erreur lors du clic : {e}{RESET}")
-                
-                # Attente pour laisser le commentaire être posté
+                    print(f"{RED}Erreur clic #1 : {e}{RESET}")
+                    os.system(f"{self.adb} input tap 960 2085")
+            
                 await asyncio.sleep(2)
-                
-                # ==================================================
-                # 11. Fermer la fenêtre de commentaire (Optionnel)
-                # ==================================================
-                # Si la fenêtre ne se ferme pas d'elle-même après l'envoi :
+            
+                # =========================
+                # 8. CLIC ENVOYER #2
+                # =========================
+                print(f"{GREEN}📤 Clic ENVOYER #2 sur (960, 2085)...{RESET}")
+                try:
+                    self.d.click(960, 2085)
+                    print(f"{GREEN}✅ Clic #2 effectué{RESET}")
+                except Exception as e:
+                    print(f"{RED}Erreur clic #2 : {e}{RESET}")
+                    os.system(f"{self.adb} input tap 960 2085")
+            
+                await asyncio.sleep(2)
+            
+                # =========================
+                # 9. Fermer commentaires si encore ouvert
+                # =========================
                 if self.d(className="android.widget.EditText").exists:
-                    print(f"{MAGENTA}Fermeture de la bulle de commentaire...{RESET}")
+                    print(f"{MAGENTA}Fermeture bulle commentaire...{RESET}")
                     os.system(f"{self.adb} input keyevent 4")
-                
             
                 await asyncio.sleep(1)
             # --- FOLLOW ---
@@ -648,22 +618,57 @@ votre limite de CashCoin.
         await self.client.run_until_disconnected()
         
     async def timeout_watcher(self):
-        """Surveille s'il n'y a pas de réponse du bot après 2 minutes (120 secondes)."""
+        """Surveille s'il n'y a pas de réponse du bot après 3 minutes (180 secondes)."""
         while True:
-            # Vérifie l'état toutes les 10 secondes pour ne pas surcharger le processeur
-            await asyncio.sleep(10) 
+            await asyncio.sleep(10)
             
-            # Si le temps actuel moins le temps de la dernière activité dépasse 120 secondes
-            if time.time() - self.last_activity_time > 200:
-                if self.last_sent_msg:
-                    print(f"\n{RED}⏳ Timeout détecté (2 min sans réponse). Le réseau ou le bot a buggé.{RESET}")
-                    print(f"{CYAN}🔄 Renvoi de la dernière commande : {self.last_sent_msg}{RESET}")
-                    
-                    # On reset le timer immédiatement pour éviter le spam
+            if time.time() - self.last_activity_time > 180:
+                print(f"\n{RED}⏳ Timeout détecté (3 min sans réponse). Réinitialisation en cours...{RESET}")
+                
+                # Reset du timer immédiatement pour éviter le spam
+                self.last_activity_time = time.time()
+    
+                # =========================
+                # 1. Envoyer 4x "🔙Back" espacés de 5 secondes
+                # =========================
+                for i in range(1, 5):
+                    print(f"{YELLOW}🔙 Envoi Back #{i}/4...{RESET}")
+                    try:
+                        await self.client.send_message(TARGET_BOT, "🔙Back")
+                    except Exception as e:
+                        print(f"{RED}Erreur envoi Back #{i} : {e}{RESET}")
+                    await asyncio.sleep(5)
+    
+                # =========================
+                # 2. Attendre 10 secondes
+                # =========================
+                print(f"{CYAN}⏳ Attente 10 secondes avant relance...{RESET}")
+                await asyncio.sleep(10)
+    
+                # =========================
+                # 3. Envoyer "📝Tasks📝"
+                # =========================
+                print(f"{CYAN}📝 Envoi Tasks...{RESET}")
+                try:
+                    await self.client.send_message(TARGET_BOT, "📝Tasks📝")
+                    self.last_sent_msg = "📝Tasks📝"
                     self.last_activity_time = time.time()
-                    
-                    # On relance la commande bloquée
-                    await self.send_bot_command(self.last_sent_msg)
+                except Exception as e:
+                    print(f"{RED}Erreur envoi Tasks : {e}{RESET}")
+    
+                # =========================
+                # 4. Attendre 5 secondes
+                # =========================
+                await asyncio.sleep(5)
+    
+                # =========================
+                # 5. Reprendre depuis le début : envoyer "TikTok"
+                # =========================
+                print(f"{GREEN}🚀 Relance depuis le début : envoi TikTok...{RESET}")
+                try:
+                    await self.send_bot_command("TikTok")
+                except Exception as e:
+                    print(f"{RED}Erreur envoi TikTok : {e}{RESET}")
 
     async def on_message(self, event):
         # 👇 NOUVEAU : Mettre à jour le chrono car on a reçu une réponse
@@ -880,14 +885,6 @@ votre limite de CashCoin.
             await self.send_bot_command("TikTok")
             return
 
-        # --- FIGÉ SUR LE MENU D'ACCUEIL ---
-        elif "Marketing Balance" in text or "How to work" in text:
-            print(f"{YELLOW}🏠 Figé sur le menu d'accueil. Envoi Tasks + TikTok...{RESET}")
-            await self.send_bot_command("📝Tasks📝")
-            await asyncio.sleep(2)
-            await self.send_bot_command("TikTok")
-            return
-
         
         # --- 5. COMPTE A RÉPARER ---
         elif "🔴 Account" in text or "too" in text:
@@ -907,7 +904,7 @@ votre limite de CashCoin.
         # ==========================================
 
         # PROBLÈME 2 : Le Timeout de 2 minutes
-        elif "The task wasn't completed within 2 minutes" in text:
+        elif "completed within 2 minutes" in text:
             print(f"{YELLOW}⏳ Timeout de tâche détecté. Fermeture de TikTok et relance...{RESET}")
             
             # --- NOUVEAUTÉ : Fermeture de l'application ---
@@ -946,7 +943,7 @@ votre limite de CashCoin.
 ██║ ╚═╝ ██║██║╚██████╗██║  ██║
 ╚═╝     ╚═╝╚═╝ ╚═════╝╚═╝  ╚═╝{RESET}
 {DIM}━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━{RESET}
-{WHITE}🤖 BOT AUTOMATION V2.7 (badComm) {DIM}|{RESET} {CYAN}BY MICH{RESET}
+{WHITE}🤖 BOT AUTOMATION V2.8 (badComm) {DIM}|{RESET} {CYAN}BY MICH{RESET}
 {DIM}━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━{RESET}
  👤 User          : {user_info}
  💳 CashCoin (DB) : {db_cash}
