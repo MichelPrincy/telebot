@@ -405,7 +405,7 @@ votre limite de CashCoin.
                     # ✅ APRÈS — retirer "shell", et vérifier via le résultat stdout
                     result = subprocess.run(
                         f"{self.adb} am broadcast -a ADB_INPUT_B64 --es msg {b64}",
-                        shell=True, capture_output=True, text=True
+                        shell=True, capture_output=True, text=True,
                         print(f"{CYAN}    DEBUG self.adb = '{self.adb}'{RESET}")
                     )
                     await asyncio.sleep(1)
