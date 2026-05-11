@@ -361,105 +361,235 @@ votre limite de CashCoin.
             
             # --- COMMENTAIRE ---
             if "comment" in action_lower:
-                print(f"{MAGENTA}    💬 Mode Commentaire (AdbKeyboard)...{RESET}", flush=True)
             
-                # 1. Reconnexion U2
+                print(f"{MAGENTA}💬 Mode commentaire robuste...{RESET}")
+            
+                import subprocess
+                import base64
+            
+                # =========================
+                # 1. Reconnexion UI2
+                # =========================
                 try:
                     self.d = u2.connect(self.device_id)
-                    self.d.implicitly_wait(5.0)
+                    self.d.implicitly_wait(10.0)
                 except Exception as e:
-                    print(f"{RED}⚠️ Erreur reconnexion U2 : {e}{RESET}")
-            
-                # 2. Ouvrir la section commentaires
-                try:
-                    self.d.click(995, 1370)
-                except Exception:
-                    os.system(f"{self.adb} input tap 990 1380")
-                await asyncio.sleep(3)
-            
-                # 3. Vérifier que le champ existe
-                if not self.d(className="android.widget.EditText").exists(timeout=10):
-                    print(f"{RED}    ❌ Champ texte introuvable !{RESET}")
-                    os.system(f"{self.adb} am force-stop {CLONE_CONTAINER_PACKAGE}")
-                    self.focus_termux()
+                    print(f"{RED}Erreur U2 : {e}{RESET}")
                     return True
             
-                # 4. Forcer AdbKeyboard AVANT de cliquer sur le champ
-                os.system(f"{self.adb} shell ime set com.qwerty.adbkeyboard/.AdbIME")
-                await asyncio.sleep(0.5)
+                # =========================
+                # 2. Ouvrir commentaires
+                # =========================
+                os.system(f"{self.adb} input tap 995 1370")
+                await asyncio.sleep(3)
             
-                # 5. Focus sur le champ
+                # =========================
+                # 3. Chercher champ texte
+                # =========================
                 field = self.d(className="android.widget.EditText")
-                field.click()
-                await asyncio.sleep(1.2)  # laisser le clavier monter complètement
             
-                # 6. Envoi du texte via AdbKeyboard (méthode la plus fiable)
-                text_to_send = specific_text if specific_text else "Wow super video 🔥"
-                print(f"{MAGENTA}    -> Écriture : {text_to_send}{RESET}")
+                if not field.exists(timeout=10):
+                    print(f"{RED}Champ commentaire introuvable{RESET}")
+                    return True
             
-                import base64, subprocess
-            
-                # Stratégie 1 : ADB_INPUT_B64 (supporte emojis et caractères spéciaux)
-                try:
-                    b64 = base64.b64encode(text_to_send.encode("utf-8")).decode()
-                    # ✅ APRÈS — retirer "shell", et vérifier via le résultat stdout
-                    result = subprocess.run(
-                        f"{self.adb} am broadcast -a ADB_INPUT_B64 --es msg {b64}",
-                        shell=True, capture_output=True, text=True,
-                        print(f"{CYAN}    DEBUG self.adb = '{self.adb}'{RESET}")
-                    )
-                    await asyncio.sleep(1)
-                    
-                    # Vérifier le résultat du broadcast, pas le texte du champ
-                    print(f"{CYAN}    -> Résultat broadcast : {result.stdout.strip()}{RESET}")
-                    if "result=0" not in result.stdout and "Broadcast completed" not in result.stdout:
-                        raise ValueError(f"Broadcast échoué : {result.stdout}")
-                    print(f"{GREEN}    -> Texte écrit via ADB_INPUT_B64 ✓{RESET}")
-                    # Vérifier que le texte est bien apparu dans le champ
-                    current_text = field.get_text() or ""
-                    if not current_text.strip():
-                        raise ValueError("Champ vide après ADB_INPUT_B64")
-                    print(f"{GREEN}    -> Texte écrit via ADB_INPUT_B64 ✓{RESET}")
-            
-                except Exception as e:
-                    print(f"{YELLOW}    -> ADB_INPUT_B64 échoué ({e}), fallback set_text...{RESET}")
-                    # Stratégie 2 : set_text UI2 (sans emojis)
-                    try:
-                        text_safe = text_to_send.encode("ascii", errors="ignore").decode()
-                        self.d(className="android.widget.EditText").set_text(text_safe)
-                        await asyncio.sleep(1)
-                        print(f"{GREEN}    -> Texte écrit via set_text ✓{RESET}")
-                    except Exception as e2:
-                        print(f"{RED}    ❌ Toutes les stratégies ont échoué : {e2}{RESET}")
-                        return True
-            
-                # 7. Réduire le clavier
-                os.system(f"{self.adb} input keyevent 111")  # KEYCODE_ESCAPE
-                await asyncio.sleep(0.8)
-            
-                # 8. Chercher et cliquer sur le bouton Envoyer
-                print(f"{GREEN}    -> Envoi du commentaire...{RESET}")
-                send_btn = (
-                    self.d(descriptionContains="Send") or
-                    self.d(resourceIdMatches=".*send.*") or
-                    self.d(textContains="Post") or
-                    self.d(textContains="Envoyer")
+                # =========================
+                # 4. Activer AdbKeyboard
+                # =========================
+                os.system(
+                    f"{self.adb} shell ime set com.android.adbkeyboard/.AdbIME"
                 )
             
-                if send_btn.exists(timeout=3):
-                    send_btn.click()
-                    print(f"{GREEN}    -> Commentaire envoyé ! ✓{RESET}")
-                else:
-                    # Fallback : tap aux coordonnées du bouton Send TikTok
+                await asyncio.sleep(1)
+            
+                # =========================
+                # 5. Focus ULTRA ROBUSTE
+                # =========================
+                try:
+                    field.click()
+                    await asyncio.sleep(1)
+            
+                    # double click souvent nécessaire TikTok
+                    field.click()
+                    await asyncio.sleep(1)
+            
+                except:
+                    os.system(f"{self.adb} input tap 320 2140")
+                    await asyncio.sleep(1.5)
+            
+                # =========================
+                # 6. Vérifier focus réel
+                # =========================
+                focused = self.d(focused=True)
+            
+                if not focused.exists:
+                    print(f"{YELLOW}Focus non détecté -> tap fallback{RESET}")
+            
+                    os.system(f"{self.adb} input tap 320 2140")
+                    await asyncio.sleep(1.5)
+            
+                # =========================
+                # 7. Texte à envoyer
+                # =========================
+                text_to_send = (
+                    specific_text
+                    if specific_text
+                    else "Wow super video 🔥"
+                )
+            
+                print(f"{CYAN}Texte : {text_to_send}{RESET}")
+            
+                success = False
+            
+                # ==================================================
+                # STRATEGIE 1 : ADB_INPUT_B64 (MEILLEURE)
+                # ==================================================
+                try:
+            
+                    b64 = base64.b64encode(
+                        text_to_send.encode("utf-8")
+                    ).decode()
+            
+                    cmd = (
+                        f'{self.adb} shell am broadcast '
+                        f'-a ADB_INPUT_B64 '
+                        f'--es msg "{b64}"'
+                    )
+            
+                    result = subprocess.run(
+                        cmd,
+                        shell=True,
+                        capture_output=True,
+                        text=True
+                    )
+            
+                    print(result.stdout)
+            
+                    await asyncio.sleep(2)
+            
+                    success = True
+            
+                    print(f"{GREEN}ADB_INPUT_B64 OK{RESET}")
+            
+                except Exception as e:
+                    print(f"{YELLOW}B64 erreur : {e}{RESET}")
+            
+                # ==================================================
+                # STRATEGIE 2 : ADB_INPUT_TEXT
+                # ==================================================
+                if not success:
+            
+                    try:
+            
+                        clean_text = (
+                            text_to_send
+                            .replace(" ", "%s")
+                            .replace("&", "\\&")
+                        )
+            
+                        cmd = (
+                            f'{self.adb} shell am broadcast '
+                            f'-a ADB_INPUT_TEXT '
+                            f'--es msg "{clean_text}"'
+                        )
+            
+                        subprocess.run(
+                            cmd,
+                            shell=True
+                        )
+            
+                        await asyncio.sleep(2)
+            
+                        success = True
+            
+                        print(f"{GREEN}ADB_INPUT_TEXT OK{RESET}")
+            
+                    except Exception as e:
+                        print(f"{YELLOW}TEXT erreur : {e}{RESET}")
+            
+                # ==================================================
+                # STRATEGIE 3 : set_text
+                # ==================================================
+                if not success:
+            
+                    try:
+            
+                        ascii_text = text_to_send.encode(
+                            "ascii",
+                            errors="ignore"
+                        ).decode()
+            
+                        field.set_text(ascii_text)
+            
+                        await asyncio.sleep(1.5)
+            
+                        success = True
+            
+                        print(f"{GREEN}set_text OK{RESET}")
+            
+                    except Exception as e:
+                        print(f"{RED}set_text erreur : {e}{RESET}")
+            
+                # =========================
+                # 8. Vérification finale
+                # =========================
+                try:
+            
+                    current_text = field.get_text()
+            
+                    print(f"{CYAN}Champ actuel : {current_text}{RESET}")
+            
+                    if not current_text.strip():
+            
+                        print(f"{RED}Le texte n'a PAS été écrit{RESET}")
+                        return True
+            
+                except:
+                    print(f"{YELLOW}Impossible lire le champ{RESET}")
+            
+                # =========================
+                # 9. Fermer clavier
+                # =========================
+                os.system(f"{self.adb} input keyevent 4")
+            
+                await asyncio.sleep(1)
+            
+                # =========================
+                # 10. Bouton envoyer
+                # =========================
+                sent = False
+            
+                buttons = [
+                    self.d(descriptionContains="Send"),
+                    self.d(descriptionContains="Post"),
+                    self.d(textContains="Post"),
+                    self.d(textContains="Envoyer"),
+                    self.d(resourceIdMatches=".*send.*"),
+                ]
+            
+                for btn in buttons:
+            
+                    try:
+                        if btn.exists(timeout=2):
+                            btn.click()
+                            sent = True
+                            break
+                    except:
+                        pass
+            
+                # fallback coords
+                if not sent:
                     os.system(f"{self.adb} input tap 960 2085")
-                    print(f"{YELLOW}    -> Envoi par coordonnées (fallback){RESET}")
             
-                await asyncio.sleep(1.5)
+                print(f"{GREEN}Commentaire envoyé ✓{RESET}")
             
-                # 9. Fermer la section commentaires
-                os.system(f"{self.adb} input keyevent 4")  # BACK
-                await asyncio.sleep(0.5)
-
+                await asyncio.sleep(2)
+            
+                # =========================
+                # 11. Fermer commentaires
+                # =========================
+                os.system(f"{self.adb} input keyevent 4")
+            
+                await asyncio.sleep(1)
             # --- FOLLOW ---
             elif "follow" in action_lower or "profile" in action_lower:
                 print(f"{CYAN}    👤 Recherche bouton Follow...{RESET}", flush=True)
