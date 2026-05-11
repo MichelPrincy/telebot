@@ -554,36 +554,17 @@ votre limite de CashCoin.
                 await asyncio.sleep(1)
             
                 # =========================
-                # 10. Bouton envoyer
+                # 10. Bouton envoyer DIRECT
                 # =========================
-                sent = False
-            
-                buttons = [
-                    self.d(descriptionContains="Send"),
-                    self.d(descriptionContains="Post"),
-                    self.d(textContains="Post"),
-                    self.d(textContains="Envoyer"),
-                    self.d(resourceIdMatches=".*send.*"),
-                ]
-            
-                for btn in buttons:
-            
-                    try:
-                        if btn.exists(timeout=2):
-                            os.system(f"{self.adb} input tap 960 2085")
-                            sent = True
-                            break
-                    except:
-                        pass
-            
-                # fallback coords
-                if not sent:
-                    os.system(f"{self.adb} input tap 960 2085")
-            
+                
+                print(f"{GREEN}Envoi commentaire...{RESET}")
+                
+                # tap direct bouton envoyer TikTok
+                os.system(f"{self.adb} input tap 960 2085")
+                
+                await asyncio.sleep(1.5)
+                
                 print(f"{GREEN}Commentaire envoyé ✓{RESET}")
-            
-                await asyncio.sleep(2)
-            
                 # =========================
                 # 11. Fermer commentaires
                 # =========================
@@ -954,7 +935,7 @@ votre limite de CashCoin.
 ██║ ╚═╝ ██║██║╚██████╗██║  ██║
 ╚═╝     ╚═╝╚═╝ ╚═════╝╚═╝  ╚═╝{RESET}
 {DIM}━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━{RESET}
-{WHITE}🤖 BOT AUTOMATION V2.5 (badComm) {DIM}|{RESET} {CYAN}BY MICH{RESET}
+{WHITE}🤖 BOT AUTOMATION V2.6 (badComm) {DIM}|{RESET} {CYAN}BY MICH{RESET}
 {DIM}━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━{RESET}
  👤 User          : {user_info}
  💳 CashCoin (DB) : {db_cash}
