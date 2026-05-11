@@ -546,29 +546,40 @@ votre limite de CashCoin.
                 except:
                     print(f"{YELLOW}Impossible lire le champ{RESET}")
             
-                # =========================
-                # 9. Fermer clavier
-                # =========================
-                os.system(f"{self.adb} input keyevent 4")
-            
-                await asyncio.sleep(1)
-            
-                # =========================
-                # 10. Bouton envoyer DIRECT
-                # =========================
+                # ==================================================
+                # 9. Fermeture du clavier (Touche Retour)
+                # ==================================================
+                print(f"{CYAN}Fermeture du clavier pour libérer l'écran...{RESET}")
+                self.d.press("back") 
                 
-                print(f"{GREEN}Envoi commentaire...{RESET}")
-                
-                # tap direct bouton envoyer TikTok
-                os.system(f"{self.adb} input tap 960 2085")
-                
+                # On laisse un petit délai pour que l'animation de descente 
+                # du clavier soit terminée, sinon le clic tape dans le vide.
                 await asyncio.sleep(1.5)
                 
-                print(f"{GREEN}Commentaire envoyé ✓{RESET}")
-                # =========================
-                # 11. Fermer commentaires
-                # =========================
-                os.system(f"{self.adb} input keyevent 4")
+                # ==================================================
+                # 10. Clic sur le bouton Envoyer avec self.d
+                # ==================================================
+                print(f"{GREEN}Tentative d'envoi aux coordonnées (960, 2085)...{RESET}")
+                
+                try:
+                    # Utilisation de self.d pour un clic plus précis qu'ADB brut
+                    self.d.click(960, 2085)
+                    print(f"{GREEN}Clic effectué avec succès ✓{RESET}")
+                    
+                except Exception as e:
+                    print(f"{RED}Erreur lors du clic : {e}{RESET}")
+                
+                # Attente pour laisser le commentaire être posté
+                await asyncio.sleep(2)
+                
+                # ==================================================
+                # 11. Fermer la fenêtre de commentaire (Optionnel)
+                # ==================================================
+                # Si la fenêtre ne se ferme pas d'elle-même après l'envoi :
+                if self.d(className="android.widget.EditText").exists:
+                    print(f"{MAGENTA}Fermeture de la bulle de commentaire...{RESET}")
+                    os.system(f"{self.adb} input keyevent 4")
+                
             
                 await asyncio.sleep(1)
             # --- FOLLOW ---
@@ -935,7 +946,7 @@ votre limite de CashCoin.
 ██║ ╚═╝ ██║██║╚██████╗██║  ██║
 ╚═╝     ╚═╝╚═╝ ╚═════╝╚═╝  ╚═╝{RESET}
 {DIM}━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━{RESET}
-{WHITE}🤖 BOT AUTOMATION V2.6 (badComm) {DIM}|{RESET} {CYAN}BY MICH{RESET}
+{WHITE}🤖 BOT AUTOMATION V2.7 (badComm) {DIM}|{RESET} {CYAN}BY MICH{RESET}
 {DIM}━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━{RESET}
  👤 User          : {user_info}
  💳 CashCoin (DB) : {db_cash}
