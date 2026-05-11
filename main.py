@@ -360,99 +360,97 @@ votre limite de CashCoin.
             action_lower = action.lower()
             
             # --- COMMENTAIRE ---
-            # --- COMMENTAIRE ---
             if "comment" in action_lower:
                 print(f"{MAGENTA}    💬 Mode Commentaire (AdbKeyboard)...{RESET}", flush=True)
             
-                # Reconnexion U2
-                print(f"{YELLOW}🔌 Reconnexion de uiautomator2...{RESET}")
+                # 1. Reconnexion U2
                 try:
                     self.d = u2.connect(self.device_id)
                     self.d.implicitly_wait(5.0)
-                    self.d.settings['operation_delay'] = (0.2, 0.2)
                 except Exception as e:
                     print(f"{RED}⚠️ Erreur reconnexion U2 : {e}{RESET}")
             
-                # 1. Ouvrir la section commentaires
-                print(f"{CYAN}    -> Clic sur coordonnée commentaires (995, 1370)...{RESET}")
+                # 2. Ouvrir la section commentaires
                 try:
                     self.d.click(995, 1370)
-                    print(f"{GREEN}    -> Clic U2 OK{RESET}")
-                except Exception as e:
-                    print(f"{YELLOW}    -> Clic U2 échoué ({e}), fallback ADB tap...{RESET}")
+                except Exception:
                     os.system(f"{self.adb} input tap 990 1380")
-            
                 await asyncio.sleep(3)
             
-                # 2. Vérifier que le champ existe (timeout augmenté à 10s)
-                print(f"{CYAN}    -> Vérification champ EditText...{RESET}")
+                # 3. Vérifier que le champ existe
                 if not self.d(className="android.widget.EditText").exists(timeout=10):
-                    print(f"{RED}    ❌ Champ texte introuvable après 10s !{RESET}")
+                    print(f"{RED}    ❌ Champ texte introuvable !{RESET}")
                     os.system(f"{self.adb} am force-stop {CLONE_CONTAINER_PACKAGE}")
                     self.focus_termux()
                     return True
             
-                # 3. Focus sur le champ
-                # 3. Focus sur le champ — attendre que le clavier remonte
+                # 4. Forcer AdbKeyboard AVANT de cliquer sur le champ
+                os.system(f"{self.adb} shell ime set com.qwerty.adbkeyboard/.AdbIME")
+                await asyncio.sleep(0.5)
+            
+                # 5. Focus sur le champ
                 field = self.d(className="android.widget.EditText")
                 field.click()
-                await asyncio.sleep(0.8)  # laisser le clavier monter
-                
-                # S'assurer qu'AdbKeyboard est actif
-                os.system(f"{self.adb} shell ime set com.qwerty.adbkeyboard/.AdbIME")
-                await asyncio.sleep(0.3)
-                
+                await asyncio.sleep(1.2)  # laisser le clavier monter complètement
+            
+                # 6. Envoi du texte via AdbKeyboard (méthode la plus fiable)
                 text_to_send = specific_text if specific_text else "Wow super video 🔥"
                 print(f"{MAGENTA}    -> Écriture : {text_to_send}{RESET}")
-                    
-                    # Écriture du texte
-                    # Stratégie 1 : clipboard (la plus fiable)
+            
+                import base64, subprocess
+            
+                # Stratégie 1 : ADB_INPUT_B64 (supporte emojis et caractères spéciaux)
                 try:
-                    import subprocess
-                    subprocess.run(
-                        f'adb -s {self.device_id} shell am broadcast -a clipper.set -e text "{text_to_send}"',
-                        shell=True
+                    b64 = base64.b64encode(text_to_send.encode("utf-8")).decode()
+                    result = subprocess.run(
+                        f"{self.adb} shell am broadcast -a ADB_INPUT_B64 --es msg {b64}",
+                        shell=True, capture_output=True, text=True
                     )
-                        # Coller avec CTRL+V via keyevent
-                    os.system(f"{self.adb} input keyevent 279")  # KEYCODE_PASTE
                     await asyncio.sleep(1)
-                    print(f"{GREEN}    -> Texte collé via clipboard{RESET}")
-                except:
-                        # Stratégie 2 : send_keys UI2
+                    # Vérifier que le texte est bien apparu dans le champ
+                    current_text = field.get_text() or ""
+                    if not current_text.strip():
+                        raise ValueError("Champ vide après ADB_INPUT_B64")
+                    print(f"{GREEN}    -> Texte écrit via ADB_INPUT_B64 ✓{RESET}")
+            
+                except Exception as e:
+                    print(f"{YELLOW}    -> ADB_INPUT_B64 échoué ({e}), fallback set_text...{RESET}")
+                    # Stratégie 2 : set_text UI2 (sans emojis)
                     try:
-                        self.d(className="android.widget.EditText").set_text(text_to_send)
-                    except:
-                            # Stratégie 3 : ADB input text
-                        import base64
-                        b64 = base64.b64encode(text_to_send.encode()).decode()
-                        os.system(f"{self.adb} am broadcast -a ADB_INPUT_B64 --es msg {b64}")
-                    
-                    # Petite pause pour laisser le texte s'afficher
-                await asyncio.sleep(1)
-
-                # 4. Réduire le clavier
-                print(f"{CYAN}    -> Réduction du clavier...{RESET}")
-                os.system(f"{self.adb} input tap 575 554")
-                await asyncio.sleep(1)  # 1.5s → 1s
-
-                # 5. Envoyer le commentaire
+                        text_safe = text_to_send.encode("ascii", errors="ignore").decode()
+                        self.d(className="android.widget.EditText").set_text(text_safe)
+                        await asyncio.sleep(1)
+                        print(f"{GREEN}    -> Texte écrit via set_text ✓{RESET}")
+                    except Exception as e2:
+                        print(f"{RED}    ❌ Toutes les stratégies ont échoué : {e2}{RESET}")
+                        return True
+            
+                # 7. Réduire le clavier
+                os.system(f"{self.adb} input keyevent 111")  # KEYCODE_ESCAPE
+                await asyncio.sleep(0.8)
+            
+                # 8. Chercher et cliquer sur le bouton Envoyer
                 print(f"{GREEN}    -> Envoi du commentaire...{RESET}")
-                send_btn = self.d(descriptionContains="Send")
-                if not send_btn.exists(timeout=2):
-                    send_btn = self.d(resourceIdMatches=".*send.*")
-                if not send_btn.exists(timeout=2):
-                    send_btn = self.d(textContains="Post")
-
-                if send_btn.exists(timeout=2):  # 3s → 2s
+                send_btn = (
+                    self.d(descriptionContains="Send") or
+                    self.d(resourceIdMatches=".*send.*") or
+                    self.d(textContains="Post") or
+                    self.d(textContains="Envoyer")
+                )
+            
+                if send_btn.exists(timeout=3):
                     send_btn.click()
+                    print(f"{GREEN}    -> Commentaire envoyé ! ✓{RESET}")
                 else:
+                    # Fallback : tap aux coordonnées du bouton Send TikTok
                     os.system(f"{self.adb} input tap 960 2085")
-
-                print(f"{GREEN}    -> Commentaire envoyé !{RESET}")
-                await asyncio.sleep(1.5)  # 2s → 1.5s
-
-                # 6. Fermer la section commentaires
-                os.system(f"{self.adb} input tap 500 200")
+                    print(f"{YELLOW}    -> Envoi par coordonnées (fallback){RESET}")
+            
+                await asyncio.sleep(1.5)
+            
+                # 9. Fermer la section commentaires
+                os.system(f"{self.adb} input keyevent 4")  # BACK
+                await asyncio.sleep(0.5)
 
             # --- FOLLOW ---
             elif "follow" in action_lower or "profile" in action_lower:
@@ -818,7 +816,7 @@ votre limite de CashCoin.
 ██║ ╚═╝ ██║██║╚██████╗██║  ██║
 ╚═╝     ╚═╝╚═╝ ╚═════╝╚═╝  ╚═╝{RESET}
 {DIM}━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━{RESET}
-{WHITE}🤖 BOT AUTOMATION V2.1 (badComm) {DIM}|{RESET} {CYAN}BY MICH{RESET}
+{WHITE}🤖 BOT AUTOMATION V2.2 (badComm) {DIM}|{RESET} {CYAN}BY MICH{RESET}
 {DIM}━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━{RESET}
  👤 User          : {user_info}
  💳 CashCoin (DB) : {db_cash}
