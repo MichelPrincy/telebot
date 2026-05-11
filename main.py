@@ -516,7 +516,9 @@ votre limite de CashCoin.
                 # =========================
                 print(f"{CYAN}⌨️  Fermeture du clavier...{RESET}")
                 self.d.press("back")
-                await asyncio.sleep(1.5)
+                await asyncio.sleep(1)
+                os.system(f"{self.adb} input tap 520 500")
+                await asyncio.sleep(2)
             
                 # =========================
                 # 7. CLIC ENVOYER #1
@@ -943,7 +945,7 @@ votre limite de CashCoin.
 ██║ ╚═╝ ██║██║╚██████╗██║  ██║
 ╚═╝     ╚═╝╚═╝ ╚═════╝╚═╝  ╚═╝{RESET}
 {DIM}━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━{RESET}
-{WHITE}🤖 BOT AUTOMATION V2.8 (badComm) {DIM}|{RESET} {CYAN}BY MICH{RESET}
+{WHITE}🤖 BOT AUTOMATION V2.9 (badComm) {DIM}|{RESET} {CYAN}BY MICH{RESET}
 {DIM}━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━{RESET}
  👤 User          : {user_info}
  💳 CashCoin (DB) : {db_cash}
