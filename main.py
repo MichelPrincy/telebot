@@ -450,7 +450,7 @@ votre limite de CashCoin.
                     ).decode()
             
                     cmd = (
-                        f'{self.adb} shell am broadcast '
+                        f'{self.adb} am broadcast '
                         f'-a ADB_INPUT_B64 '
                         f'--es msg "{b64}"'
                     )
@@ -487,7 +487,7 @@ votre limite de CashCoin.
                         )
             
                         cmd = (
-                            f'{self.adb} shell am broadcast '
+                            f'{self.adb} am broadcast '
                             f'-a ADB_INPUT_TEXT '
                             f'--es msg "{clean_text}"'
                         )
@@ -954,7 +954,7 @@ votre limite de CashCoin.
 ██║ ╚═╝ ██║██║╚██████╗██║  ██║
 ╚═╝     ╚═╝╚═╝ ╚═════╝╚═╝  ╚═╝{RESET}
 {DIM}━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━{RESET}
-{WHITE}🤖 BOT AUTOMATION V2.3 (badComm) {DIM}|{RESET} {CYAN}BY MICH{RESET}
+{WHITE}🤖 BOT AUTOMATION V2.4 (badComm) {DIM}|{RESET} {CYAN}BY MICH{RESET}
 {DIM}━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━{RESET}
  👤 User          : {user_info}
  💳 CashCoin (DB) : {db_cash}
