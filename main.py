@@ -336,56 +336,7 @@ votre limite de CashCoin.
         print(f"{GREEN}✅ Alarme arrêtée. Reprise du script...{RESET}")
         alarm_thread.join(timeout=2)  # Max 2s d'attente, pas 8s
 
-    # ---------- HELPER COMMENTAIRE ----------
-    def _write_comment_adbkeyboard(self, text: str) -> bool:
-        adb_parts = self.adb.split() # ["adb", "-s", "device_id"]
     
-        def adb_cmd(cmd: list):
-            return subprocess.run(adb_parts + cmd, capture_output=True, text=True).stdout.strip()
-    
-        try:
-            # 1. Activation forcée de l'IME AdbKeyboard
-            adb_cmd(["shell", "ime", "set", "com.qwerty.adbkeyboard/.AdbIME"])
-            time.sleep(0.5) # Temps de latence pour l'initialisation de l'IME
-    
-            # 2. Nettoyage du champ (Sélectionner tout + Supprimer)
-            # On utilise uiautomator2 pour le focus si possible, sinon ADB
-            adb_cmd(["shell", "input", "keyevent", "KEYCODE_MOVE_END"]) # Fin du texte
-            adb_cmd(["shell", "input", "keyevent", "--longpress", "67"] * 20) # Supprime bcp de caractères
-            # Ou plus radical :
-            adb_cmd(["shell", "input", "keyevent", "KEYCODE_CTRL_A"])
-            adb_cmd(["shell", "input", "keyevent", "KEYCODE_DEL"])
-            
-            # 3. Envoi en Base64 (C'est le secret de la fiabilité)
-            # AdbKeyboard supporte l'action ADB_INPUT_B64
-            msg_b64 = base64.b64encode(text.encode('utf-8')).decode('utf-8')
-            print(f"    [ADB] Envoi B64 : {text}")
-            
-            # On tente l'envoi via broadcast Base64
-            adb_cmd(["shell", "am", "broadcast", "-a", "ADB_INPUT_B64", "--es", "msg", msg_b64])
-            time.sleep(1.0)
-    
-            # 4. Vérification de réussite
-            field = self.d(className="android.widget.EditText")
-            if field.exists:
-                current_text = field.get_text()
-                if current_text and len(current_text) > 0:
-                    return True
-    
-            # 5. ULTIME FALLBACK : Presse-papier (Clipboard)
-            print("    [Fallback] Tentative via Clipboard...")
-            self.d.set_clipboard(text)
-            time.sleep(0.5)
-            # Long press pour coller ou CTRL+V
-            field.click() # S'assurer du focus
-            adb_cmd(["shell", "input", "keyevent", "KEYCODE_CTRL_V"])
-            time.sleep(0.5)
-            
-            return len(field.get_text() or "") > 0
-    
-        except Exception as e:
-            print(f"    [Erreur Écriture] : {e}")
-        return False
     # ---------- ACTIONS ----------
     async def do_task(self, account_idx, link, action, specific_text=None):
         try:
@@ -453,17 +404,31 @@ votre limite de CashCoin.
                 
                 text_to_send = specific_text if specific_text else "Wow super video 🔥"
                 print(f"{MAGENTA}    -> Écriture : {text_to_send}{RESET}")
-                
-                # Écriture via méthode multi-fallback
-                write_ok = await asyncio.to_thread(self._write_comment_adbkeyboard, text_to_send)
-
-                if not write_ok:
-                    print(f"{RED}    ❌ Impossible d'écrire le commentaire.{RESET}")
-                    os.system(f"{self.adb} am force-stop {CLONE_CONTAINER_PACKAGE}")
-                    self.focus_termux()
-                    return False
-
-                await asyncio.sleep(0.5)  # 1s → 0.5s
+                    
+                    # Écriture du texte
+                    # Stratégie 1 : clipboard (la plus fiable)
+                try:
+                    import subprocess
+                    subprocess.run(
+                        f'adb -s {self.device_id} shell am broadcast -a clipper.set -e text "{text_to_send}"',
+                        shell=True
+                    )
+                        # Coller avec CTRL+V via keyevent
+                    os.system(f"{self.adb} input keyevent 279")  # KEYCODE_PASTE
+                    await asyncio.sleep(1)
+                    print(f"{GREEN}    -> Texte collé via clipboard{RESET}")
+                except:
+                        # Stratégie 2 : send_keys UI2
+                    try:
+                        self.d(className="android.widget.EditText").set_text(text_to_send)
+                    except:
+                            # Stratégie 3 : ADB input text
+                        import base64
+                        b64 = base64.b64encode(text_to_send.encode()).decode()
+                        os.system(f"{self.adb} am broadcast -a ADB_INPUT_B64 --es msg {b64}")
+                    
+                    # Petite pause pour laisser le texte s'afficher
+                await asyncio.sleep(1)
 
                 # 4. Réduire le clavier
                 print(f"{CYAN}    -> Réduction du clavier...{RESET}")
@@ -853,7 +818,7 @@ votre limite de CashCoin.
 ██║ ╚═╝ ██║██║╚██████╗██║  ██║
 ╚═╝     ╚═╝╚═╝ ╚═════╝╚═╝  ╚═╝{RESET}
 {DIM}━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━{RESET}
-{WHITE}🤖 BOT AUTOMATION V2.0 (badComm) {DIM}|{RESET} {CYAN}BY MICH{RESET}
+{WHITE}🤖 BOT AUTOMATION V2.1 (badComm) {DIM}|{RESET} {CYAN}BY MICH{RESET}
 {DIM}━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━{RESET}
  👤 User          : {user_info}
  💳 CashCoin (DB) : {db_cash}
