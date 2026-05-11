@@ -402,11 +402,19 @@ votre limite de CashCoin.
                 # Stratégie 1 : ADB_INPUT_B64 (supporte emojis et caractères spéciaux)
                 try:
                     b64 = base64.b64encode(text_to_send.encode("utf-8")).decode()
+                    # ✅ APRÈS — retirer "shell", et vérifier via le résultat stdout
                     result = subprocess.run(
-                        f"{self.adb} shell am broadcast -a ADB_INPUT_B64 --es msg {b64}",
+                        f"{self.adb} am broadcast -a ADB_INPUT_B64 --es msg {b64}",
                         shell=True, capture_output=True, text=True
+                        print(f"{CYAN}    DEBUG self.adb = '{self.adb}'{RESET}")
                     )
                     await asyncio.sleep(1)
+                    
+                    # Vérifier le résultat du broadcast, pas le texte du champ
+                    print(f"{CYAN}    -> Résultat broadcast : {result.stdout.strip()}{RESET}")
+                    if "result=0" not in result.stdout and "Broadcast completed" not in result.stdout:
+                        raise ValueError(f"Broadcast échoué : {result.stdout}")
+                    print(f"{GREEN}    -> Texte écrit via ADB_INPUT_B64 ✓{RESET}")
                     # Vérifier que le texte est bien apparu dans le champ
                     current_text = field.get_text() or ""
                     if not current_text.strip():
@@ -816,7 +824,7 @@ votre limite de CashCoin.
 ██║ ╚═╝ ██║██║╚██████╗██║  ██║
 ╚═╝     ╚═╝╚═╝ ╚═════╝╚═╝  ╚═╝{RESET}
 {DIM}━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━{RESET}
-{WHITE}🤖 BOT AUTOMATION V2.2 (badComm) {DIM}|{RESET} {CYAN}BY MICH{RESET}
+{WHITE}🤖 BOT AUTOMATION V2.3 (badComm) {DIM}|{RESET} {CYAN}BY MICH{RESET}
 {DIM}━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━{RESET}
  👤 User          : {user_info}
  💳 CashCoin (DB) : {db_cash}
