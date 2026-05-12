@@ -660,6 +660,7 @@ votre limite de CashCoin.
                 except Exception as e:
                     print(f"{RED}Erreur envoi TikTok : {e}{RESET}")
 
+    #one message
     async def on_message(self, event):
         # 👇 NOUVEAU : Mettre à jour le chrono car on a reçu une réponse
         self.last_activity_time = time.time()
