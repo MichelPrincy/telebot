@@ -533,18 +533,6 @@ votre limite de CashCoin.
             
                 await asyncio.sleep(2)
             
-                # =========================
-                # 8. CLIC ENVOYER #2
-                # =========================
-                print(f"{GREEN}📤 Clic ENVOYER #2 sur (960, 2085)...{RESET}")
-                try:
-                    self.d.click(960, 2085)
-                    print(f"{GREEN}✅ Clic #2 effectué{RESET}")
-                except Exception as e:
-                    print(f"{RED}Erreur clic #2 : {e}{RESET}")
-                    os.system(f"{self.adb} input tap 960 2085")
-            
-                await asyncio.sleep(2)
             
                 # =========================
                 # 9. Fermer commentaires si encore ouvert
@@ -945,7 +933,7 @@ votre limite de CashCoin.
 ██║ ╚═╝ ██║██║╚██████╗██║  ██║
 ╚═╝     ╚═╝╚═╝ ╚═════╝╚═╝  ╚═╝{RESET}
 {DIM}━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━{RESET}
-{WHITE}🤖 BOT AUTOMATION V2.9 (badComm) {DIM}|{RESET} {CYAN}BY MICH{RESET}
+{WHITE}🤖 BOT AUTOMATION V2.0 (full TikTok) {DIM}|{RESET} {CYAN}BY MICH{RESET}
 {DIM}━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━{RESET}
  👤 User          : {user_info}
  💳 CashCoin (DB) : {db_cash}
