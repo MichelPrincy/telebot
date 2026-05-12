@@ -838,13 +838,7 @@ votre limite de CashCoin.
 
         # --- 4. GESTION BOUTONS COMPTE ---
         elif buttons and "Link" not in text:
-            # 🔒 CAS SPECIAL : Figé sur la liste des comptes (menu réseau social)
-            if "Choose social network" in text:
-                print(f"{YELLOW}🔄 Figé sur menu réseau. Envoi Back + TikTok...{RESET}")
-                await self.send_bot_command("🔙Back")
-                await asyncio.sleep(2)
-                await self.send_bot_command("TikTok")
-                return
+            
         
             target = self.accounts[self.index]
             clicked = False
