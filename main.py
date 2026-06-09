@@ -5,6 +5,7 @@ import httpx
 import re
 import base64
 import subprocess
+from telethon.errors import FloodWaitError
 import time
 import requests
 import threading
@@ -239,9 +240,21 @@ votre limite de CashCoin.
 
     async def send_bot_command(self, message):
         self.last_sent_msg = message
-        # 👇 NOUVEAU : Mettre à jour le chrono
         self.last_activity_time = time.time()
-        await self.client.send_message(TARGET_BOT, message)
+        
+        for tentative in range(3):  # Max 3 essais
+            try:
+                await self.client.send_message(TARGET_BOT, message)
+                return  # Succès, on sort
+            except FloodWaitError as e:
+                wait_time = e.seconds + 3  # +3s de sécurité
+                print(f"{YELLOW}⏳ FloodWait Telegram : attente imposée de {wait_time}s (tentative {tentative+1}/3)...{RESET}")
+                await asyncio.sleep(wait_time)
+            except Exception as e:
+                print(f"{RED}⚠️ Erreur envoi message Telegram : {e}{RESET}")
+                await asyncio.sleep(5)
+        
+        print(f"{RED}❌ Impossible d'envoyer après 3 tentatives.{RESET}")
 
     def update_script(self):
         print(f"{CYAN}🌐 Vérification mise à jour...{RESET}", flush=True)
@@ -817,7 +830,7 @@ votre limite de CashCoin.
 
         # --- 2. GESTION SUIVANTE ---
         elif "added" in text.lower() or "credited" in text.lower():
-            await asyncio.sleep(4)
+            await asyncio.sleep(7)
             self.last_sent_msg = "TikTok"
             await self.send_bot_command("TikTok")
 
@@ -832,7 +845,7 @@ votre limite de CashCoin.
                 await self.client.disconnect()
                 return
 
-            await asyncio.sleep(4)
+            await asyncio.sleep(7)
             print(f"\n{WHITE}🔍 Switch vers : {CYAN}{next_acc}{RESET}", flush=True)
             self.last_sent_msg = "TikTok"
             await self.send_bot_command("TikTok")
@@ -928,7 +941,7 @@ votre limite de CashCoin.
 ██║ ╚═╝ ██║██║╚██████╗██║  ██║
 ╚═╝     ╚═╝╚═╝ ╚═════╝╚═╝  ╚═╝{RESET}
 {DIM}━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━{RESET}
-{WHITE}🤖 BOT AUTOMATION V2.0 (full TikTok) {DIM}|{RESET} {CYAN}BY MICH{RESET}
+{WHITE}🤖 BOT AUTOMATION V2.1 (full TikTok) {DIM}|{RESET} {CYAN}BY MICH{RESET}
 {DIM}━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━{RESET}
  👤 User          : {user_info}
  💳 CashCoin (DB) : {db_cash}
