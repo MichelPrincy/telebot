@@ -830,7 +830,7 @@ votre limite de CashCoin.
 
         # --- 2. GESTION SUIVANTE ---
         elif "added" in text.lower() or "credited" in text.lower():
-            await asyncio.sleep(7)
+            await asyncio.sleep(10)
             self.last_sent_msg = "TikTok"
             await self.send_bot_command("TikTok")
 
@@ -845,7 +845,7 @@ votre limite de CashCoin.
                 await self.client.disconnect()
                 return
 
-            await asyncio.sleep(7)
+            await asyncio.sleep(10)
             print(f"\n{WHITE}🔍 Switch vers : {CYAN}{next_acc}{RESET}", flush=True)
             self.last_sent_msg = "TikTok"
             await self.send_bot_command("TikTok")
@@ -941,7 +941,7 @@ votre limite de CashCoin.
 ██║ ╚═╝ ██║██║╚██████╗██║  ██║
 ╚═╝     ╚═╝╚═╝ ╚═════╝╚═╝  ╚═╝{RESET}
 {DIM}━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━{RESET}
-{WHITE}🤖 BOT AUTOMATION V2.1 (full TikTok) {DIM}|{RESET} {CYAN}BY MICH{RESET}
+{WHITE}🤖 BOT AUTOMATION V2.2 (full TikTok) {DIM}|{RESET} {CYAN}BY MICH{RESET}
 {DIM}━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━{RESET}
  👤 User          : {user_info}
  💳 CashCoin (DB) : {db_cash}
