@@ -359,7 +359,7 @@ votre limite de CashCoin.
             os.system(f'{self.adb} am start -a android.intent.action.VIEW -d "{link}" -p com.waxmoon.ma.gp > /dev/null 2>&1')
             await asyncio.sleep(4)
             os.system(f"{self.adb} input tap {coord_clone}")
-            await asyncio.sleep(16)  # 20s → 12s
+            await asyncio.sleep(15)  # 20s → 12s
 
             os.system(f'{self.adb} am start -a android.intent.action.VIEW -d "{link}" -p com.waxmoon.ma.gp > /dev/null 2>&1')
             await asyncio.sleep(3)
@@ -429,7 +429,7 @@ votre limite de CashCoin.
             
                 if not field.exists(timeout=10):
                     print(f"{RED}Champ commentaire introuvable{RESET}")
-                    return True
+                
             
                 # =========================
                 # 3. Activer AdbKeyboard
@@ -830,7 +830,7 @@ votre limite de CashCoin.
 
         # --- 2. GESTION SUIVANTE ---
         elif "added" in text.lower() or "credited" in text.lower():
-            await asyncio.sleep(10)
+            await asyncio.sleep(5)
             self.last_sent_msg = "TikTok"
             await self.send_bot_command("TikTok")
 
@@ -845,7 +845,7 @@ votre limite de CashCoin.
                 await self.client.disconnect()
                 return
 
-            await asyncio.sleep(10)
+            await asyncio.sleep(5)
             print(f"\n{WHITE}🔍 Switch vers : {CYAN}{next_acc}{RESET}", flush=True)
             self.last_sent_msg = "TikTok"
             await self.send_bot_command("TikTok")
@@ -941,7 +941,7 @@ votre limite de CashCoin.
 ██║ ╚═╝ ██║██║╚██████╗██║  ██║
 ╚═╝     ╚═╝╚═╝ ╚═════╝╚═╝  ╚═╝{RESET}
 {DIM}━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━{RESET}
-{WHITE}🤖 BOT AUTOMATION V2.2 (full TikTok) {DIM}|{RESET} {CYAN}BY MICH{RESET}
+{WHITE}🤖 BOT AUTOMATION V2.3 (full TikTok) {DIM}|{RESET} {CYAN}BY MICH{RESET}
 {DIM}━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━{RESET}
  👤 User          : {user_info}
  💳 CashCoin (DB) : {db_cash}
