@@ -357,16 +357,16 @@ votre limite de CashCoin.
             coord_clone = self.dynamic_chooser.get(account_idx, "100 1100")
             
             os.system(f'{self.adb} am start -a android.intent.action.VIEW -d "{link}" -p com.waxmoon.ma.gp > /dev/null 2>&1')
-            await asyncio.sleep(7)
+            await asyncio.sleep(10)
             os.system(f"{self.adb} input tap {coord_clone}")
             await asyncio.sleep(15)  # 20s → 12s
 
             os.system(f'{self.adb} am start -a android.intent.action.VIEW -d "{link}" -p com.waxmoon.ma.gp > /dev/null 2>&1')
-            await asyncio.sleep(7)
+            await asyncio.sleep(10)
             os.system(f"{self.adb} input tap {coord_clone}")
             
             print(f"{YELLOW}⏳ Attente chargement...{RESET}", flush=True)
-            await asyncio.sleep(6)  # 10s → 6s
+            await asyncio.sleep(7)  # 10s → 6s
 
             FOLLOW_KEYWORDS = ["Suivre", "S'abonner", "Follow", "Seguir"]
             LIKE_DESC_REGEX = "(?i)(like|j'aime|love|gostar|aimer)"
@@ -941,7 +941,7 @@ votre limite de CashCoin.
 ██║ ╚═╝ ██║██║╚██████╗██║  ██║
 ╚═╝     ╚═╝╚═╝ ╚═════╝╚═╝  ╚═╝{RESET}
 {DIM}━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━{RESET}
-{WHITE}🤖 BOT AUTOMATION V2.0 (full TikTok) {DIM}|{RESET} {CYAN}BY MICH{RESET}
+{WHITE}🤖 BOT AUTOMATION V2.1 (full TikTok) {DIM}|{RESET} {CYAN}BY MICH{RESET}
 {DIM}━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━{RESET}
  👤 User          : {user_info}
  💳 CashCoin (DB) : {db_cash}
